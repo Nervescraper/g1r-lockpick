@@ -133,7 +133,8 @@ export function dirSign(dir) {
 
 export function moveDelta(coupling, plate, dir) {
   const s = dirSign(dir);
-  return coupling[plate].map((v) => s * v);
+  // `+ 0` normalizes -0 (from -1 * 0) back to 0 so equality checks are clean
+  return coupling[plate].map((v) => s * v + 0);
 }
 
 export function applyMove(positions, coupling, plate, dir) {
