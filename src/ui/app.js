@@ -166,6 +166,7 @@ function setupPanel() {
 
   const prows = state.positions
     .map((p, i) => `<div class="prow"><span class="pl">P${i + 1}</span><div class="scale">${positionScale(i, p)}</div></div>`)
+    .reverse() // show P1 at the bottom, matching the board's front-to-back order
     .join('');
 
   const primary = state.lockLoaded
@@ -253,6 +254,7 @@ function movedControls(rec) {
         <span class="${mark === 'R' ? 'on-r' : ''}" data-action="rec-mark" data-plate="${j}" data-dir="R">▶ right</span>
       </div>${noMark}</div>`;
     })
+    .reverse() // P1 at the bottom, matching the board
     .join('');
   return `
     <div class="muted" style="margin-bottom:6px">Tap a plate only if you saw it shift:</div>
