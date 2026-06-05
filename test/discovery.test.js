@@ -72,6 +72,12 @@ test('after deferring a plate, a different plate is recommended next', () => {
   assert.notEqual(rec.plate, 0);
 });
 
+test('recommendNext returns null when every plate is mapped', () => {
+  const m = createMapping(2);
+  m.status = ['done', 'done'];
+  assert.equal(recommendNext([4, 4], m), null);
+});
+
 test('falls back to a least-risky probe when an edge plate blocks safety', () => {
   const m = createMapping(2);
   m.status = ['unstarted', 'done'];

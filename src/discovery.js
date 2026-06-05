@@ -81,6 +81,7 @@ export function recommendNext(positions, mapping) {
   for (let i = 0; i < mapping.n; i++) {
     if (mapping.status[i] !== 'done') candidates.push(i);
   }
+  if (candidates.length === 0) return null; // everything is mapped
   candidates.sort(
     (a, b) => candidateOrder(mapping.status[a]) - candidateOrder(mapping.status[b])
   );

@@ -44,6 +44,9 @@ body {
 }
 .tp-plate.probe { box-shadow: 0 0 0 2px var(--gold), 0 16px 0 -1px #1b1c20, 0 26px 22px -6px rgba(0,0,0,.6); }
 .tp-plate.dim { opacity: .5; }
+.tp-plate.selectable { cursor: pointer; }
+.tp-2drow.selectable { cursor: pointer; }
+.tp-2drow.active2d .tp-2dholes { box-shadow: 0 0 0 2px var(--gold), inset 0 1px 0 #6a6e74; }
 .tp-hole {
   position: relative; width: 15px; height: 15px; border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #1f2125, #08090b); box-shadow: inset 0 2px 3px #000;

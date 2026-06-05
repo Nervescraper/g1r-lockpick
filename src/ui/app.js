@@ -1,7 +1,7 @@
 import { createBoard } from './board.js';
 import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
 import { solve } from '../solver.js';
-import { createMapping, recommendNext, applyProbe, defer, allMapped } from '../discovery.js';
+import { createMapping, recommendNext, applyProbe, probeSafe, allMapped } from '../discovery.js';
 import { loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession } from '../storage.js';
 
 const store = window.localStorage;
@@ -194,57 +194,95 @@ function setupPanel() {
 
 // ---------- Discovery ----------
 
+function safeDefaultDir(plate) {
+  if (probeSafe(state.positions, state.mapping, plate, 'L')) return 'L';
+  if (probeSafe(state.positions, state.mapping, plate, 'R')) return 'R';
+  return state.positions[plate] > 4 ? 'R' : 'L';
+}
+
+// Pick the plate to record by default: the safe-ordered suggestion if any, else the
+// first unmapped plate, else null (everything mapped). The user can override by clicking.
+function suggestDefault() {
+  const m = state.mapping;
+  let next = null;
+  for (let i = 0; i < m.n; i++) {
+    if (m.status[i] !== 'done') { next = i; break; }
+  }
+  const rec = recommendNext(state.positions, m);
+  if (rec && rec.type === 'probe') next = rec.plate;
+  state.activePlate = next;
+  state.probeDir = next == null ? 'L' : safeDefaultDir(next);
+}
+
 function discoveryPanel(side, boardProps) {
   const m = state.mapping;
-  const rec = recommendNext(state.positions, m);
-  state.currentRec = rec;
+  if (state.record == null) state.record = {};
+  if (state.outcome == null) state.outcome = 'moved';
+  if (state.activePlate === undefined) suggestDefault();
 
-  // board: highlight the recommended plate
+  const mapped = m.status.filter((s) => s === 'done').length;
+  const suggestion = allMapped(m) ? null : recommendNext(state.positions, m);
+  const active = state.activePlate;
+
+  // every plate clickable; the one being recorded is highlighted
   const labels = state.positions.map((p, i) => {
-    const extra = i === rec.plate ? ' ◀ ' + (rec.type === 'prep' ? 'prep' : 'probing') : '';
     const dotCls = m.status[i] === 'done' ? 'ok' : '';
-    const dot = `<span class="dot ${dotCls}"></span>`;
-    return { html: `<b>P${i + 1}</b> · ${p}${extra}${dot}`, active: i === rec.plate };
+    const tag = i === active ? ' ◀ recording' : '';
+    return { html: `<b>P${i + 1}</b> · ${p}${tag}<span class="dot ${dotCls}"></span>`, active: i === active };
   });
-  boardProps = { ...boardProps, labels, highlightPlate: rec.plate, dimOthers: true };
+  boardProps = { ...boardProps, labels, highlightPlate: active, selectable: true };
+
+  let tip = '';
+  if (suggestion && suggestion.type === 'prep') {
+    tip = `<div class="note" style="border-left-color:var(--gold)">Tip: a plate is at an edge.
+      Safe setup move <b>${plateLabel(suggestion.plate)} → ${DIR_WORD[suggestion.dir]}</b> pulls it toward center.
+      <span class="ap-btn" data-action="prep-done" style="margin-left:6px">Do it ›</span></div>`;
+  } else if (suggestion && suggestion.type === 'probe' && suggestion.plate !== active) {
+    tip = `<div class="muted" style="margin-top:8px">Suggested: <b style="color:var(--gold)">${plateLabel(
+      suggestion.plate)}</b> ${suggestion.safe ? '✓ safe' : '⚠ risky'}
+      <span class="ap-btn" data-action="select-plate" data-plate="${suggestion.plate}" style="margin-left:6px">Record it ›</span></div>`;
+  }
+
+  const dotsHtml = `<div class="dots">${m.status.map((s) => `<i class="${statusDot(s)}"></i>`).join('')}</div>
+    <div class="muted" style="margin-top:6px">● mapped &nbsp; ● not yet</div>`;
+  const solveBtn = allMapped(m)
+    ? '<div style="margin-top:12px"><span class="ap-btn primary" data-action="goto-solve">All mapped — Solve ›</span></div>'
+    : '';
 
   const card = document.createElement('div');
   card.className = 'ap-card';
-  const mappedCount = m.status.filter((s) => s === 'done').length;
 
-  if (rec.type === 'prep') {
-    card.innerHTML = `
-      <div class="ap-h">Map the lock · ${mappedCount} of ${m.n} plates mapped</div>
-      <div style="font-size:15px;color:#fff;margin-bottom:4px">Safe setup move: <b style="color:var(--gold)">${plateLabel(
-        rec.plate
-      )} → ${DIR_WORD[rec.dir]}</b> <span class="badge safe">✓ safe</span></div>
-      <div class="muted">${rec.reason}</div>
-      <div style="margin-top:12px"><span class="ap-btn primary" data-action="prep-done">Did it ›</span></div>
-    `;
-  } else {
-    const safe = rec.safe;
-    card.innerHTML = `
-      <div class="ap-h">Map the lock · ${mappedCount} of ${m.n} plates mapped</div>
-      <div style="font-size:15px;color:#fff;margin-bottom:4px">Probe <b style="color:var(--gold)">${plateLabel(
-        rec.plate
-      )}</b>: press <b style="color:var(--gold)">${DIR_WORD[rec.dir]}</b> once
-        <span class="badge ${safe ? 'safe' : 'risk'}">${safe ? "✓ won't block" : '⚠ risky'}</span></div>
-      <div class="muted">${rec.reason}</div>
-      <div class="outcome">
-        <span class="${state.outcome === 'moved' ? 'on' : ''}" data-action="outcome" data-val="moved">Moved ✓</span>
-        <span class="${state.outcome === 'blocked' ? 'on blk' : ''}" data-action="outcome" data-val="blocked">Blocked / shook ⚠</span>
-      </div>
-      ${state.outcome === 'moved' ? movedControls(rec) : blockedControls(rec)}
-      <div class="dots">${m.status.map((s) => `<i class="${statusDot(s)}"></i>`).join('')}</div>
-      <div class="muted" style="margin-top:6px">● done &nbsp; <span style="color:#6a5634">●</span> partial &nbsp; ● not started</div>
-      ${allMapped(m) ? '<div style="margin-top:12px"><span class="ap-btn primary" data-action="goto-solve">All mapped — Solve ›</span></div>' : ''}
-    `;
+  if (active == null) {
+    card.innerHTML = `<div class="ap-h">Map the lock · ${mapped} of ${m.n} mapped</div>
+      <div class="muted">Tap any plate on the board to record its connections.</div>
+      ${tip}${dotsHtml}${solveBtn}`;
+    side.appendChild(card);
+    return boardProps;
   }
+
+  const safe = probeSafe(state.positions, m, active, state.probeDir);
+  card.innerHTML = `
+    <div class="ap-h">Map the lock · ${mapped} of ${m.n} mapped</div>
+    <div style="font-size:15px;color:#fff;margin-bottom:2px">Recording <b style="color:var(--gold)">${plateLabel(active)}</b>
+      <span class="muted" style="font-weight:400">— tap another plate to switch</span></div>
+    <div class="muted" style="margin-bottom:6px">Press this direction on ${plateLabel(active)} once in game:</div>
+    <div class="seg" style="margin-bottom:6px; align-items:center">
+      <span class="${state.probeDir === 'L' ? 'on-l' : ''}" data-action="set-dir" data-dir="L">Left</span>
+      <span class="${state.probeDir === 'R' ? 'on-r' : ''}" data-action="set-dir" data-dir="R">Right</span>
+      <span class="badge ${safe ? 'safe' : 'risk'}">${safe ? "✓ won't block" : '⚠ risky'}</span>
+    </div>
+    <div class="outcome">
+      <span class="${state.outcome === 'moved' ? 'on' : ''}" data-action="outcome" data-val="moved">Moved ✓</span>
+      <span class="${state.outcome === 'blocked' ? 'on blk' : ''}" data-action="outcome" data-val="blocked">Blocked / shook ⚠</span>
+    </div>
+    ${state.outcome === 'moved' ? movedControls() : blockedControls()}
+    ${tip}${dotsHtml}${solveBtn}
+  `;
   side.appendChild(card);
   return boardProps;
 }
 
-function movedControls(rec) {
+function movedControls() {
   const rows = state.positions
     .map((_, j) => {
       const mark = state.record[j];
@@ -257,25 +295,18 @@ function movedControls(rec) {
     .reverse() // P1 at the bottom, matching the board
     .join('');
   return `
-    <div class="muted" style="margin-bottom:6px">Tap a plate only if you saw it shift:</div>
+    <div class="muted" style="margin:6px 0">Mark each plate you saw shift:</div>
     ${rows}
-    <div class="muted" style="margin-top:9px">Positions update automatically from your marks — no reset needed.</div>
-    <div style="margin-top:12px">
-      <span class="ap-btn primary" data-action="save-next">Save &amp; next ›</span>
-      <span class="ap-btn" data-action="defer">Defer (keeps marks)</span>
-    </div>`;
+    <div style="margin-top:12px"><span class="ap-btn primary" data-action="save-next">Save ›</span></div>`;
 }
 
-function blockedControls(rec) {
-  const opp = rec.dir === 'L' ? 'Right' : 'Left';
+function blockedControls() {
+  const opp = state.probeDir === 'L' ? 'Right' : 'Left';
   return `
     <div class="note"><b>Blocked.</b> The game shakes only the stuck plate, hiding the others this move
-      controls — so the row can't be read. Try pressing <b>${opp}</b> instead, or first move the edge
-      plate toward center, then retry. A blocked attempt costs 1 durability. Anything you already marked is kept.</div>
-    <div style="margin-top:12px">
-      <span class="ap-btn" data-action="retry">Retry</span>
-      <span class="ap-btn" data-action="defer-blocked">Defer this plate</span>
-    </div>`;
+      controls — so the row can't be read. Try pressing <b>${opp}</b> instead (toggle above), or first move
+      the edge plate toward center, then retry. A blocked attempt costs 1 durability. Anything you already
+      marked is kept.</div>`;
 }
 
 // ---------- Solve ----------
@@ -400,46 +431,44 @@ appEl.addEventListener('click', (e) => {
       state.mapping = createMapping(state.n);
       state.record = {};
       state.outcome = 'moved';
+      state.activePlate = undefined;
       state.stage = 'discovery';
+      suggestDefault();
       break;
     case 'goto-solve': state.stage = 'solve'; state.editing = false; break;
     case 'new-lock': state = freshSetup(state.n); break;
 
+    case 'select-plate': {
+      const p = +t.dataset.plate;
+      state.activePlate = p;
+      state.probeDir = safeDefaultDir(p);
+      state.record = {};
+      state.outcome = 'moved';
+      break;
+    }
+    case 'set-dir': state.probeDir = t.dataset.dir; break;
     case 'outcome': state.outcome = t.dataset.val; break;
     case 'rec-mark': {
       const p = +t.dataset.plate;
       const d = t.dataset.dir;
-      state.record[p] = state.record[p] === d ? undefined : d;
-      if (state.record[p] === undefined) delete state.record[p];
+      if (state.record[p] === d) delete state.record[p];
+      else state.record[p] = d;
       break;
     }
     case 'save-next': {
-      const rec = state.currentRec;
-      state.positions = applyProbe(state.positions, state.mapping, rec.plate, rec.dir, state.record, { complete: true });
+      state.positions = applyProbe(
+        state.positions, state.mapping, state.activePlate, state.probeDir, state.record, { complete: true }
+      );
       state.record = {};
       state.outcome = 'moved';
+      suggestDefault();
       break;
     }
-    case 'defer': {
-      const rec = state.currentRec;
-      if (Object.keys(state.record).length) {
-        state.positions = applyProbe(state.positions, state.mapping, rec.plate, rec.dir, state.record, { complete: false });
-      } else {
-        defer(state.mapping, rec.plate);
-      }
-      state.record = {};
-      state.outcome = 'moved';
-      break;
-    }
-    case 'defer-blocked':
-      defer(state.mapping, state.currentRec.plate);
-      state.record = {};
-      state.outcome = 'moved';
-      break;
-    case 'retry': state.outcome = 'moved'; break;
     case 'prep-done': {
-      const rec = state.currentRec;
-      state.positions = applyMove(state.positions, state.mapping.coupling, rec.plate, rec.dir);
+      const rec = recommendNext(state.positions, state.mapping);
+      if (rec && rec.type === 'prep') {
+        state.positions = applyMove(state.positions, state.mapping.coupling, rec.plate, rec.dir);
+      }
       break;
     }
 

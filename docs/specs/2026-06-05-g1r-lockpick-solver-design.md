@@ -115,12 +115,16 @@ If a probe is **Blocked**: anything already seen is **kept**; the wizard suggest
 player retries. The blocked attempt costs 1 durability, so a tricky plate may take a couple
 of passes.
 
-### 5.5 Defer
+### 5.5 Free selection (no explicit defer)
 
-The player can **Defer** a plate at any time; all marks made so far are **saved**. This is
-common: you see one plate shift, mark it, then must work other plates before the rest of
-the row can be observed. Progress is shown per plate as **done / partial (deferred) / not
-started**.
+Mapping is **free-form**: the player clicks any plate on the board to record it, and clicks
+another plate to switch at any time. There is no separate "defer" step — switching away
+simply leaves a plate unfinished, and every mark already made for it is **kept** (the
+coupling matrix persists). This matches the common case where you see one plate shift, mark
+it, then must work other plates before the rest of its row can be observed. The safe-probe
+recommendation (§5.3) is still computed and shown as a **non-blocking suggestion** ("record
+this one next"), but never forces the order. Progress is shown per plate as **mapped / not
+yet**, and a plate's row can be revisited and revised by clicking it again.
 
 ## 6. UI
 
@@ -141,9 +145,10 @@ started**.
 
 - **Setup:** plate-count stepper (3–8); a 1–7 position picker per plate (goal hole marked);
   the board previews positions live. "Start mapping."
-- **Discovery:** the next recommended probe with its safety badge and reason; **Moved /
-  Blocked** outcome; per-plate **◀ left / ▶ right** recorder; blocked-probe guidance; "Save
-  & next" / "Defer (keeps marks)"; per-plate progress dots.
+- **Discovery:** click any plate on the board to record it (the active plate is highlighted);
+  a Left/Right direction toggle with a safety badge ("✓ won't block" / "⚠ risky"); **Moved /
+  Blocked** outcome; per-plate **◀ left / ▶ right** recorder; blocked-probe guidance; "Save";
+  a non-blocking "Suggested" hint for the next safe plate; per-plate progress dots.
 - **Solve:** big **next move** callout (e.g. `P4 → Left ✓ safe`) with what it shifts and
   edge-safety; **Back / Did it › / Edit positions** controls; the full **plan** as a step
   list with the current step highlighted; durability and projected breaks (0); a **coupling

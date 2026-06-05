@@ -40,6 +40,11 @@ export function createBoard(host, s) {
     plate.style.filter = `brightness(${bright})`;
     if (s.highlightPlate === i) plate.classList.add('probe');
     else if (s.dimOthers) plate.classList.add('dim');
+    if (s.selectable) {
+      plate.classList.add('selectable');
+      plate.dataset.action = 'select-plate';
+      plate.dataset.plate = String(i);
+    }
 
     const pos = s.positions[i];
     for (let h = 0; h < 7; h++) {
@@ -68,6 +73,12 @@ export function createBoard(host, s) {
   for (let i = 0; i < n; i++) {
     const row = document.createElement('div');
     row.className = 'tp-2drow';
+    if (s.selectable) {
+      row.classList.add('selectable');
+      row.dataset.action = 'select-plate';
+      row.dataset.plate = String(i);
+    }
+    if (s.highlightPlate === i) row.classList.add('active2d');
     const lbl = document.createElement('div');
     lbl.className = 'tp-2dlabel';
     lbl.innerHTML = (s.labels && s.labels[i] && s.labels[i].html) || `<b>P${i + 1}</b> · ${s.positions[i]}`;

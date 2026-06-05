@@ -54,10 +54,10 @@ Full CSS and HTML are produced in the implementation (board/panel styles carried
 
 ## Task 4: App controller — Discovery stage
 
-- [ ] **Step 1:** Call `recommendNext(positions, mapping)`; render the recommended probe/prep with its safe/risky reason; highlight the target plate, dim others.
-- [ ] **Step 2:** Moved/Blocked outcome. On Moved: a `◀ left / ▶ right` recorder per plate; "Save & next" calls `applyProbe(...)`, advancing positions and status; "Defer" calls `defer(...)` keeping marks.
-- [ ] **Step 3:** On Blocked: show the retry guidance (try opposite dir / prep), note the durability cost; positions unchanged.
-- [ ] **Step 4:** Progress dots (done/partial/unstarted). When `allMapped`, enable "Solve".
+- [ ] **Step 1:** Make every board plate clickable (`select-plate`); the active plate is highlighted. `recommendNext(...)` is shown as a **non-blocking** "Suggested" hint (or a prep "Do it" tip), never forcing the order.
+- [ ] **Step 2:** A Left/Right direction toggle (`set-dir`) with a `probeSafe` badge. Moved/Blocked outcome. On Moved: a `◀ left / ▶ right` recorder per plate; "Save" calls `applyProbe(...)`, advancing positions and marking the plate mapped, then auto-suggests the next plate. No Defer button — switching plates is just clicking another one; marks persist.
+- [ ] **Step 3:** On Blocked: show the retry guidance (toggle to the opposite dir / prep), note the durability cost; positions unchanged.
+- [ ] **Step 4:** Progress dots (mapped / not yet). When `allMapped`, enable "Solve".
 - [ ] **Step 5 (verify):** map a small lock by hand; deferring keeps marks; allMapped enables Solve.
 - [ ] **Step 6:** Commit.
 
