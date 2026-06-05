@@ -43,8 +43,10 @@ function preferredDirs(positions, plate) {
 }
 
 function candidateOrder(status) {
-  // partial (0) before unstarted (1); 'done' excluded by caller
-  return status === 'partial' ? 0 : 1;
+  // unstarted (0) before partial (1); 'done' excluded by caller. Deferring a plate
+  // marks it 'partial', so it is revisited only after fresh plates — otherwise the
+  // just-deferred plate would be recommended again immediately.
+  return status === 'unstarted' ? 0 : 1;
 }
 
 // Among fully-mapped plates, find a legal known move that pulls a plate currently

@@ -58,11 +58,18 @@ test('recommends a guaranteed-safe probe when one exists', () => {
   assert.equal(m.status[rec.plate] !== 'done', true);
 });
 
-test('skips already-done plates and prefers partial ones', () => {
+test('skips done plates and works fresh plates before deferred (partial) ones', () => {
   const m = createMapping(3);
   m.status = ['done', 'partial', 'unstarted'];
   const rec = recommendNext([4, 3, 5], m);
-  assert.equal(rec.plate, 1); // partial preferred over unstarted, done skipped
+  assert.equal(rec.plate, 2); // unstarted first; the deferred plate waits its turn
+});
+
+test('after deferring a plate, a different plate is recommended next', () => {
+  const m = createMapping(3); // all interior, every probe safe
+  defer(m, 0); // P1 -> partial
+  const rec = recommendNext([4, 4, 4], m);
+  assert.notEqual(rec.plate, 0);
 });
 
 test('falls back to a least-risky probe when an edge plate blocks safety', () => {
