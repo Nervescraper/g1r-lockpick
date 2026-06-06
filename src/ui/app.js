@@ -494,30 +494,37 @@ function computeSolvePositions() {
   return p;
 }
 
-// One move row, flat inside .ap-steplist so the scroll math and existing
-// selectors keep working. `extra` adds cycle classes; `badge` appends the ×N tag.
-function stepRowHtml(i, extra = '', badge = '') {
+// One move row.
+function stepRowHtml(i) {
   const mv = state.plan[i];
-  const cls = [i < state.planIndex ? 'past' : i === state.planIndex ? 'cur' : '', extra]
-    .filter(Boolean)
-    .join(' ');
+  const cls = i < state.planIndex ? 'past' : i === state.planIndex ? 'cur' : '';
   const check = i < state.planIndex ? ' ✓' : '';
   return `<div class="${cls}" data-action="goto-step" data-i="${i}">${i + 1} · ${plateLabel(
     mv.plate
-  )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}${badge}</div>`;
+  )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}</div>`;
 }
 
-// Expanded: list every move. A cycle run wraps its rows in a single .cyc-group so
-// one continuous brace spans the whole run, with a ×N badge on the first row.
+// The ×N label for a cycle. While you're stepping through the run it counts down
+// the repetitions still to do ("×N remaining"); otherwise it shows the total.
+function cycleBadge(seg) {
+  const end = seg.start + seg.length;
+  if (state.planIndex >= seg.start && state.planIndex < end) {
+    const done = Math.floor((state.planIndex - seg.start) / seg.unitLen);
+    return `×${seg.reps - done} remaining`;
+  }
+  return `×${seg.reps}`;
+}
+
+// Expanded: list every move. A cycle run is wrapped so a bracket encloses the run
+// on both sides, with the ×N count sitting outside the closing bracket.
 function expandedSegHtml(seg) {
   if (seg.type === 'single') return stepRowHtml(seg.index);
   const end = seg.start + seg.length - 1;
   let rows = '';
-  for (let i = seg.start; i <= end; i++) {
-    const badge = i === seg.start ? `<span class="cyc-badge">×${seg.reps}</span>` : '';
-    rows += stepRowHtml(i, '', badge);
-  }
-  return `<div class="cyc-group">${rows}</div>`;
+  for (let i = seg.start; i <= end; i++) rows += stepRowHtml(i);
+  return `<div class="cyc-group"><div class="cyc-brace left"></div><div class="cyc-rows">${rows}</div><div class="cyc-brace right"></div><span class="cyc-count">${cycleBadge(
+    seg
+  )}</span></div>`;
 }
 
 // Collapsed: a cycle run becomes one summary row showing the unit and ×N. The run
@@ -538,7 +545,7 @@ function collapsedSegHtml(seg) {
     prog = `<div class="cyc-prog">rep ${rep}/${seg.reps} · move ${move}/${seg.unitLen}</div>`;
   }
   return `<div class="cyc-col ${cls}" data-action="goto-step" data-i="${seg.start}">
-    <span class="cyc-icon">↻</span> Repeat ${unit} <span class="cyc-badge">×${seg.reps}</span>${prog}</div>`;
+    <span class="cyc-icon">↻</span> Repeat ${unit} <span class="cyc-badge">${cycleBadge(seg)}</span>${prog}</div>`;
 }
 
 function planCardEl() {

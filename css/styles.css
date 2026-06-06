@@ -203,21 +203,16 @@ body {
 .ap-steplist .past { color: #5f6b60; }
 .ap-steplist .step-arrow { color: var(--gold); font-weight: 700; }
 .ap-steplist .past .step-arrow { color: #4f7a56; }
-/* cycle indicators in the plan list — one bracket (with top/bottom feet) spans the run */
-.ap-steplist > .cyc-group { padding: 1px 2px 1px 11px; cursor: default; border-radius: 0; }
+/* cycle indicators in the plan list — brackets enclose the run, ×N sits outside */
+.ap-steplist > .cyc-group { display: flex; align-items: stretch; gap: 5px; padding: 0; margin: 3px 0; cursor: default; border-radius: 0; }
 .ap-steplist > .cyc-group:hover { background: none; }
-.cyc-group { position: relative; margin: 3px 0; }
-.cyc-group::before {
-  content: '';
-  position: absolute;
-  left: 2px; top: 1px; bottom: 1px;
-  width: 6px;
-  border: 2px solid var(--gold);
-  border-right: 0;
-  border-radius: 3px 0 0 3px;
-}
-.cyc-group > div { cursor: pointer; padding: 1px 2px; border-radius: 4px; }
-.cyc-group > div:hover { background: #232220; }
+.cyc-rows { flex: 1 1 auto; min-width: 0; }
+.cyc-rows > div { cursor: pointer; padding: 1px 2px; border-radius: 4px; }
+.cyc-rows > div:hover { background: #232220; }
+.cyc-brace { flex: 0 0 6px; margin: 1px 0; border: 2px solid var(--gold); }
+.cyc-brace.left { border-right: 0; border-radius: 3px 0 0 3px; }
+.cyc-brace.right { border-left: 0; border-radius: 0 3px 3px 0; }
+.cyc-count { flex: 0 0 auto; align-self: center; font-size: 11px; font-weight: 700; color: var(--gold); white-space: nowrap; }
 .cyc-badge { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--gold); }
 .ap-steplist .cyc-col .cyc-icon { color: var(--gold); font-weight: 700; }
 .ap-steplist .cyc-col .cyc-prog { font-size: 11px; color: #9a9; margin-top: 2px; }
