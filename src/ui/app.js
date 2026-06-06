@@ -306,9 +306,9 @@ function movedControls() {
   const rows = state.positions
     .map((_, j) => {
       if (j === active) {
-        // placeholder so the row stays in place; the active plate moves itself
-        const w = state.probeDir === 'L' ? '◀ left' : '▶ right';
-        return `<div class="rec rec-self"><span class="pl">${plateLabel(j)}</span><span class="self-note">the plate you're moving — shifts ${w}</span></div>`;
+        // placeholder so the row stays in place; the active plate moves itself,
+        // in whichever direction you press, so we don't state a direction
+        return `<div class="rec rec-self"><span class="pl">${plateLabel(j)}</span><span class="self-note">the plate you're moving</span></div>`;
       }
       const mark = state.record[j];
       const noMark = mark ? '' : '<span class="nomark">no shift seen</span>';
