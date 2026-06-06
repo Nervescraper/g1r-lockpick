@@ -25,17 +25,36 @@ function freshSetup(n) {
     stage: 'setup',
     n,
     positions: Array(n).fill(GOAL),
+    initial: null,
     mapping: null,
     rel: {},
     editing: false,
     lockName: '',
+    lockId: undefined,
     lockLoaded: false,
   };
 }
 
 function persist() {
-  const { stage, n, positions, mapping, lockName, lockLoaded, plan, planIndex, solveStart } = state;
-  saveSession(store, { stage, n, positions, mapping, lockName, lockLoaded, plan, planIndex, solveStart });
+  const { stage, n, positions, initial, mapping, lockName, lockId, lockLoaded, plan, planIndex, solveStart } = state;
+  saveSession(store, { stage, n, positions, initial, mapping, lockName, lockId, lockLoaded, plan, planIndex, solveStart });
+  syncLock();
+}
+
+// If the lock has a name, keep its saved record up to date (initial pins + coupling so far).
+function syncLock() {
+  const name = (state.lockName || '').trim();
+  if (!name) return;
+  if (!state.lockId) state.lockId = `lock-${Date.now()}`;
+  saveLock(store, {
+    id: state.lockId,
+    name,
+    n: state.n,
+    initial: (state.initial || state.positions).slice(),
+    coupling: state.mapping ? state.mapping.coupling : null,
+    status: state.mapping ? state.mapping.status : null,
+    notes: '',
+  });
 }
 
 // ---------- helpers ----------
@@ -99,7 +118,15 @@ function render() {
   appEl.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'ap';
-  wrap.appendChild(railEl());
+  const bar = document.createElement('div');
+  bar.className = 'ap-bar';
+  bar.appendChild(railEl());
+  const over = document.createElement('button');
+  over.className = 'ap-reset';
+  over.dataset.action = 'start-over';
+  over.textContent = '⟳ Start over';
+  bar.appendChild(over);
+  wrap.appendChild(bar);
 
   if (state.stage === 'discovery') {
     wrap.appendChild(mappingView());
@@ -188,8 +215,11 @@ function setupPanel() {
       <button class="step" data-action="n-inc">+</button>
       <span class="muted">(${N_MIN}–${N_MAX})</span>
     </div>
-    <div class="ap-h">Current pin position of each plate</div>
+    <div class="ap-h">Current pin position of each plate <span class="muted" style="text-transform:none;letter-spacing:0">— this is saved as the lock's reset point</span></div>
     ${positionRows()}
+    <div class="ap-h" style="margin-top:14px">Lock name (optional)</div>
+    <input class="lock-name-input" type="text" data-action="lock-name" placeholder="e.g. Old Camp chest" value="${escapeHtml(state.lockName || '')}" />
+    <div class="muted" style="margin-top:4px">Named locks save automatically (count, initial pins, and connections) and appear below.</div>
     <div style="margin-top:12px">${primary}
       ${state.lockLoaded ? '<span class="ap-btn" data-action="new-lock">Start a new lock</span>' : ''}
     </div>
@@ -355,6 +385,7 @@ function solvePanel(side, boardProps) {
     <div class="ap-nm-sub">${describeMove(coupling, state.positions, next.plate, next.dir)}. No plate hits an edge.</div>
     <div style="margin-top:12px">
       <span class="ap-btn primary" data-action="did-it">Did it ›</span>
+      <span class="ap-btn" data-action="reset-pins">Reset pins (R)</span>
       <span class="ap-btn" data-action="edit-positions">Edit positions</span>
     </div>`;
   side.appendChild(nextCard);
@@ -408,7 +439,8 @@ appEl.addEventListener('click', (e) => {
     case 'n-inc': resizeN(clampN(state.n + 1)); break;
     case 'pos-set': state.positions[+t.dataset.plate] = +t.dataset.val; break;
     case 'start-mapping':
-      state.mapping = createMapping(state.n);
+      if (!state.mapping || state.mapping.n !== state.n) state.mapping = createMapping(state.n);
+      state.initial = state.positions.slice(); // the setup positions are the lock's reset point
       state.activePlate = undefined;
       state.rel = {};
       state.stage = 'discovery';
@@ -416,6 +448,17 @@ appEl.addEventListener('click', (e) => {
       break;
     case 'goto-solve': state.stage = 'solve'; state.editing = false; state.plan = undefined; break;
     case 'new-lock': state = freshSetup(state.n); break;
+    case 'start-over':
+      if (!state.mapping || window.confirm('Start over? This clears the current lock from the workspace (saved locks are kept).')) {
+        state = freshSetup(state.n);
+      }
+      break;
+    case 'reset-pins':
+      if (state.initial) {
+        state.positions = state.initial.slice();
+        if (state.stage === 'solve') state.plan = undefined; // re-plan from the reset point
+      }
+      break;
 
     case 'select-plate': {
       const p = +t.dataset.plate;
@@ -445,15 +488,17 @@ appEl.addEventListener('click', (e) => {
       break;
     }
     case 'edit-positions': state.editing = true; break;
-    case 'apply-edit': state.editing = false; state.plan = undefined; break;
+    case 'apply-edit':
+      state.editing = false;
+      state.initial = state.positions.slice(); // corrected positions become the new reset point
+      state.plan = undefined;
+      break;
     case 'back-to-map': state.stage = 'discovery'; break;
     case 'save-lock': {
       const name = prompt('Name this lock:', state.lockName || 'Lock');
       if (name) {
-        const id = state.lockId || `lock-${loadLocks(store).length + 1}-${name.replace(/\s+/g, '_')}`;
-        state.lockId = id;
         state.lockName = name;
-        saveLock(store, { id, name, n: state.mapping.n, coupling: state.mapping.coupling, notes: '' });
+        syncLock();
         flash = 'Saved.';
       }
       break;
@@ -462,17 +507,53 @@ appEl.addEventListener('click', (e) => {
       const lock = getLock(store, t.dataset.id);
       if (lock) {
         state.n = lock.n;
-        state.positions = Array(lock.n).fill(GOAL);
-        state.mapping = { n: lock.n, coupling: lock.coupling, status: Array(lock.n).fill('done') };
+        state.initial = (lock.initial || Array(lock.n).fill(GOAL)).slice();
+        state.positions = state.initial.slice();
+        if (lock.coupling) {
+          state.mapping = { n: lock.n, coupling: lock.coupling, status: lock.status || Array(lock.n).fill('done') };
+          state.lockLoaded = (lock.status || Array(lock.n).fill('done')).every((s) => s === 'done');
+        } else {
+          state.mapping = createMapping(lock.n);
+          state.lockLoaded = false;
+        }
         state.lockId = lock.id;
         state.lockName = lock.name;
-        state.lockLoaded = true;
+        state.stage = 'setup';
+        state.editing = false;
+        state.plan = undefined;
+        state.activePlate = undefined;
+        state.rel = {};
       }
       break;
     }
-    case 'del-lock': deleteLock(store, t.dataset.id); break;
+    case 'del-lock': {
+      const id = t.dataset.id;
+      const lock = getLock(store, id);
+      if (!window.confirm(`Delete ${lock ? `"${lock.name}"` : 'this lock'}? This can't be undone.`)) break;
+      deleteLock(store, id);
+      if (state.lockId === id) { state.lockId = undefined; state.lockName = ''; }
+      break;
+    }
     default: return;
   }
+  render();
+});
+
+appEl.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-action="lock-name"]');
+  if (!el) return;
+  state.lockName = el.value; // update + autosave without re-rendering (keeps the input focused)
+  syncLock();
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return; // leave Cmd/Ctrl+R for page reload
+  if (e.key !== 'r' && e.key !== 'R') return;
+  const tag = (e.target.tagName || '').toUpperCase();
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (!state.initial) return;
+  state.positions = state.initial.slice();
+  if (state.stage === 'solve') state.plan = undefined;
   render();
 });
 

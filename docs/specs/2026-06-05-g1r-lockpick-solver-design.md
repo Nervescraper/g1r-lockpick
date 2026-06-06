@@ -181,11 +181,18 @@ up/down. Left = pin position +1, Right = pin position −1.
 
 ## 8. Persistence
 
-- Saved **lock** record: `{ id, name, n, coupling (N×N of −1/0/+1), notes }`.
-- Stored in `localStorage`; a saved-locks list lets the player reload a mapped chest and go
-  straight to Solve.
-- Session/working state (current positions, stage, in-progress mapping, current plan) is
-  also kept so a refresh doesn't lose progress.
+- Saved **lock** record: `{ id, name, n, initial (starting pin positions), coupling (N×N of
+  −1/0/+1), status, notes }`.
+- A lock can be **named on the Setup screen** (optional); a named lock then **auto-saves**
+  as you set its count, initial pins, and connections, and appears in the saved-locks list.
+  Loading a lock restores its initial pins and coupling — going straight to Solve if fully
+  mapped, or resuming mapping otherwise.
+- The **initial pin state** is the lock's reset point. A **Reset** control and the **`R`**
+  hotkey set the current pins back to it (mirroring the game's reset) and re-plan from there;
+  "Edit positions" updates the reset point.
+- A **Start over** control returns to a fresh Setup at any time (saved locks are kept).
+- Session/working state (stage, positions, mapping, plan + pointer) is kept in `localStorage`
+  so a refresh doesn't lose progress.
 
 ## 9. Out of scope (YAGNI)
 
