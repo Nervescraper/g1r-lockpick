@@ -530,15 +530,19 @@ function computeSolvePositions() {
   return p;
 }
 
-// One move row. The text is wrapped in .step-tx so its content width can be
-// measured (rows themselves may be stretched full-width).
-function stepRowHtml(i) {
-  const mv = state.plan[i];
-  const cls = i < state.planIndex ? 'past' : i === state.planIndex ? 'cur' : '';
-  const check = i < state.planIndex ? ' ✓' : '';
-  return `<div class="${cls}" data-action="goto-step" data-i="${i}"><span class="step-tx">${i + 1} · ${plateLabel(
+// One move row. `num` is the displayed step number, `cls` its state
+// ('' | 'cur' | 'past'), `dataI` the plan index it jumps to. The text is wrapped
+// in .step-tx so its content width can be measured (rows may be stretched wide).
+function moveRowHtml(num, cls, dataI, mv) {
+  const check = cls === 'past' ? ' ✓' : '';
+  return `<div class="${cls}" data-action="goto-step" data-i="${dataI}"><span class="step-tx">${num} · ${plateLabel(
     mv.plate
   )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}</span></div>`;
+}
+
+function stepRowHtml(i) {
+  const cls = i < state.planIndex ? 'past' : i === state.planIndex ? 'cur' : '';
+  return moveRowHtml(i + 1, cls, i, state.plan[i]);
 }
 
 // The ×N label for a cycle. While you're stepping through the run it counts down
@@ -552,37 +556,40 @@ function cycleBadge(seg) {
   return `×${seg.reps}`;
 }
 
-// Expanded: list every move. A cycle run is wrapped so a bracket encloses the run
-// on both sides, with the ×N count sitting outside the closing bracket.
-function expandedSegHtml(seg) {
-  if (seg.type === 'single') return stepRowHtml(seg.index);
-  const end = seg.start + seg.length - 1;
-  let rows = '';
-  for (let i = seg.start; i <= end; i++) rows += stepRowHtml(i);
+// Wrap a cycle's rows in the bracket group: a bracket encloses the run on both
+// sides, with the ×N count sitting outside the closing bracket.
+function cycleGroupHtml(rows, seg) {
   return `<div class="cyc-group"><div class="cyc-brace left"></div><div class="cyc-rows">${rows}</div><div class="cyc-brace right"></div><span class="cyc-count">${cycleBadge(
     seg
   )}</span></div>`;
 }
 
-// Collapsed: a cycle run becomes one summary row showing the unit and ×N. The run
-// containing planIndex shows live "rep r/reps · move m/unitLen" progress.
+// Expanded: list every move of the run.
+function expandedSegHtml(seg) {
+  if (seg.type === 'single') return stepRowHtml(seg.index);
+  let rows = '';
+  for (let i = seg.start; i < seg.start + seg.length; i++) rows += stepRowHtml(i);
+  return cycleGroupHtml(rows, seg);
+}
+
+// Collapsed: same bracket group, but the unit's steps show only once. The step
+// numbers track the current repetition (so they advance as you complete cycles)
+// while the move text stays put; the highlight marks where you are in the unit.
 function collapsedSegHtml(seg) {
   if (seg.type === 'single') return stepRowHtml(seg.index);
-  const end = seg.start + seg.length;
-  const active = state.planIndex >= seg.start && state.planIndex < end;
-  const cls = active ? 'cur' : state.planIndex >= end ? 'past' : '';
-  const unit = seg.unit
-    .map((mv) => `${plateLabel(mv.plate)}<span class="step-arrow">${dirArrow(mv.dir)}</span>`)
-    .join(' · ');
-  let prog = '';
-  if (active) {
-    const off = state.planIndex - seg.start;
-    const rep = Math.floor(off / seg.unitLen) + 1;
-    const move = (off % seg.unitLen) + 1;
-    prog = `<div class="cyc-prog">rep ${rep}/${seg.reps} · move ${move}/${seg.unitLen}</div>`;
+  const off = state.planIndex - seg.start;
+  let rep, atMove;
+  if (off < 0) { rep = 0; atMove = -1; } // before the run: all future, no highlight
+  else if (off >= seg.length) { rep = seg.reps - 1; atMove = seg.unitLen; } // done: all past
+  else { rep = Math.floor(off / seg.unitLen); atMove = off % seg.unitLen; }
+
+  let rows = '';
+  for (let j = 0; j < seg.unitLen; j++) {
+    const idx = seg.start + rep * seg.unitLen + j;
+    const cls = j < atMove ? 'past' : j === atMove ? 'cur' : '';
+    rows += moveRowHtml(idx + 1, cls, idx, seg.unit[j]);
   }
-  return `<div class="cyc-col ${cls}" data-action="goto-step" data-i="${seg.start}">
-    <span class="cyc-icon">↻</span> Repeat ${unit} <span class="cyc-badge">${cycleBadge(seg)}</span>${prog}</div>`;
+  return cycleGroupHtml(rows, seg);
 }
 
 function planCardEl() {
