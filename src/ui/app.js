@@ -201,8 +201,28 @@ function render() {
   wrap.appendChild(footer);
 
   appEl.appendChild(wrap);
+  reserveMoveDescHeight();
   scrollCurrentStepIntoView();
   persist();
+}
+
+// The "Next move" description varies in length step to step, which would change the
+// card height and shift the "Did it" button. Reserve the height of the tallest
+// description in the whole plan so the button stays put for the entire solve.
+function reserveMoveDescHeight() {
+  const sub = appEl.querySelector('.ap-nm-sub');
+  if (!sub || !state.plan) return;
+  const coupling = state.mapping.coupling;
+  const original = sub.textContent;
+  let pos = state.solveStart.slice();
+  let max = 0;
+  for (const mv of state.plan) {
+    sub.textContent = `${describeMove(coupling, pos, mv.plate, mv.dir)}. No plate hits an edge.`;
+    if (sub.offsetHeight > max) max = sub.offsetHeight;
+    pos = applyMove(pos, coupling, mv.plate, mv.dir);
+  }
+  sub.textContent = original;
+  sub.style.minHeight = `${max}px`;
 }
 
 // Keep the current plan step one line down from the top of the steplist, so the
