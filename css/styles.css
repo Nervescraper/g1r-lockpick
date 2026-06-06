@@ -229,7 +229,6 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .ap-legend .left { color: var(--shl); }
 .ap-legend .right { color: var(--shr); }
 .success { color: var(--goal); font-size: 20px; font-weight: 700; }
-.flash { color: var(--goal); font-size: 12px; margin-left: 8px; }
 
 /* ===== flat board + unified mapping ===== */
 .tp-2dright { margin-left: auto; flex: 0 0 auto; }

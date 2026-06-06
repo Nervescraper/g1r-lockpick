@@ -14,7 +14,6 @@ const DIR_WORD = { L: 'Left', R: 'Right' };
 const appEl = document.getElementById('app');
 
 let state = restore();
-let flash = '';
 let settings = loadSettings(store);
 const kbdEnabled = () => settings.keyboardShortcuts !== false; // on by default
 
@@ -675,11 +674,9 @@ function solvePanel(side, boardProps) {
     card.className = 'ap-card';
     card.innerHTML = `<div class="success">✓ Lock open!</div>
       <div class="muted" style="margin-top:6px">Every pin is at the center (4).</div>
-      <div style="margin-top:12px">
-        <span class="ap-btn primary" data-action="save-lock">Save this lock</span>
-        <span class="ap-btn" data-action="new-lock">New lock</span>
-        <span class="flash">${flash}</span>
-      </div>`;
+      <div class="ap-h" style="margin-top:14px">Save this lock <span class="muted" style="text-transform:none;letter-spacing:0">— name it and it's kept automatically</span></div>
+      ${namingWidgetHtml()}
+      <div style="margin-top:12px"><span class="ap-btn" data-action="new-lock">New lock</span></div>`;
     side.appendChild(card);
     if (state.plan.length) side.appendChild(planCardEl());
     return boardProps;
@@ -746,7 +743,6 @@ appEl.addEventListener('click', (e) => {
   const t = e.target.closest('[data-action]');
   if (!t) return;
   const a = t.dataset.action;
-  flash = '';
 
   switch (a) {
     case 'n-dec': resizeN(clampN(state.n - 1)); break;
@@ -779,11 +775,15 @@ appEl.addEventListener('click', (e) => {
     case 'new-lock': state = freshSetup(state.n); break;
     case 'loc-fill': state.location = state.location === t.dataset.loc ? '' : t.dataset.loc; break;
     case 'kind-set': state.kind = t.dataset.kind; break;
-    case 'start-over':
-      if (!state.mapping || window.confirm('Start over? This clears the current lock from the workspace (saved locks are kept).')) {
+    case 'start-over': {
+      // Only confirm when there's unrecoverable work: a mapping that isn't saved (an unnamed
+      // lock lives only in the session, so Start over would lose it). Named locks are kept.
+      const unsaved = state.mapping && !(state.location || '').trim() && !(state.description || '').trim();
+      if (!unsaved || window.confirm("Start over? This unnamed lock isn't saved — its mapping will be lost. (Named locks are kept.)")) {
         state = freshSetup(state.n);
       }
       break;
+    }
     case 'reset-pins':
       if (state.initial) {
         state.positions = state.initial.slice();
@@ -831,18 +831,6 @@ appEl.addEventListener('click', (e) => {
       break;
     case 'cancel-edit': discardPendingEdit(); break;
     case 'back-to-map': state.stage = 'discovery'; break;
-    case 'save-lock': {
-      if (!(state.location || '').trim() && !(state.description || '').trim()) {
-        const d = prompt('Describe this lock (location / which chest):', '');
-        if (!d) break;
-        state.description = d;
-      }
-      const dup = findDuplicate();
-      if (dup) { flash = `A lock “${dup.name}” with the same details already exists.`; break; }
-      syncLock();
-      flash = 'Saved.';
-      break;
-    }
     case 'load-lock': {
       const lock = getLock(store, t.dataset.id);
       if (lock) {
