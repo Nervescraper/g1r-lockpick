@@ -12,6 +12,7 @@ import {
   parseImport,
   classifyImport,
   sameIdentity,
+  sanitizeContents,
 } from '../src/storage.js';
 
 // minimal localStorage-compatible store for tests
@@ -163,4 +164,76 @@ test('sameIdentity matches on trimmed/lowercased location+type+description', () 
   const c = { location: 'Old Camp', kind: 'Chest', description: 'Behind Throne' };
   assert.equal(sameIdentity(a, b), true);
   assert.equal(sameIdentity(a, c), false);
+});
+
+// ---------- contents (loot list) ----------
+
+test('sanitizeContents trims items, coerces qty to int >= 1, drops blank items', () => {
+  const out = sanitizeContents([
+    { item: '  Gold coins ', qty: 3 },
+    { item: 'Half', qty: 2.7 }, // floored
+    { item: 'Free', qty: 0 }, // bumped to 1
+    { item: 'NaN qty', qty: 'x' }, // defaults to 1
+    { item: '   ', qty: 5 }, // blank → dropped
+    { item: '', qty: 1 }, // blank → dropped
+    'not an object', // → dropped
+  ]);
+  assert.deepEqual(out, [
+    { item: 'Gold coins', qty: 3 },
+    { item: 'Half', qty: 2 },
+    { item: 'Free', qty: 1 },
+    { item: 'NaN qty', qty: 1 },
+  ]);
+});
+
+test('sanitizeContents returns [] for non-array / missing input', () => {
+  assert.deepEqual(sanitizeContents(undefined), []);
+  assert.deepEqual(sanitizeContents(null), []);
+  assert.deepEqual(sanitizeContents('nope'), []);
+  assert.deepEqual(sanitizeContents({}), []);
+});
+
+test('parseImport sanitizes a lock’s contents (drops blanks, coerces qty)', () => {
+  const text = exportLocks([
+    fullLock('a', {
+      contents: [
+        { item: ' Gold ', qty: 2.9 },
+        { item: '', qty: 4 }, // blank → dropped
+        { item: 'Note', qty: 0 }, // → qty 1
+      ],
+    }),
+  ]);
+  const { locks } = parseImport(text);
+  assert.deepEqual(locks[0].contents, [
+    { item: 'Gold', qty: 2 },
+    { item: 'Note', qty: 1 },
+  ]);
+});
+
+test('parseImport replaces a malformed contents field with []', () => {
+  const text = exportLocks([fullLock('a', { contents: 'junk' })]);
+  const { locks } = parseImport(text);
+  assert.deepEqual(locks[0].contents, []);
+});
+
+test('parseImport leaves a lock without contents untouched (no field added)', () => {
+  const text = exportLocks([fullLock('a')]); // fullLock has no contents
+  const { locks } = parseImport(text);
+  assert.equal('contents' in locks[0], false);
+});
+
+test('classifyImport: same id, only contents differ → conflict', () => {
+  const existing = [fullLock('a', { contents: [{ item: 'Gold', qty: 1 }] })];
+  const inc = [fullLock('a', { contents: [{ item: 'Gold', qty: 2 }] })];
+  const { conflicts, identical } = classifyImport(inc, existing);
+  assert.equal(conflicts.length, 1);
+  assert.equal(identical.length, 0);
+});
+
+test('classifyImport: identical contents → still identical (skipped)', () => {
+  const existing = [fullLock('a', { contents: [{ item: 'Gold', qty: 1 }] })];
+  const inc = [fullLock('a', { contents: [{ item: 'Gold', qty: 1 }] })];
+  const { identical, conflicts } = classifyImport(inc, existing);
+  assert.equal(identical.length, 1);
+  assert.equal(conflicts.length, 0);
 });

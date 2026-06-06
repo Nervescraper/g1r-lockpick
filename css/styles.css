@@ -190,6 +190,19 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .lock-item .x { cursor: pointer; color: #a55; }
 .lock-item .io { cursor: pointer; color: #8a9; font-size: 15px; }
 .lock-item .io:hover { color: var(--gold); }
+/* Loot summary: kept out of sight to avoid crowding the list — revealed on row hover. */
+.lock-contents { display: none; padding: 1px 9px 2px; font-size: 12px; }
+.lock-row:hover .lock-contents { display: block; }
+
+/* ---- contents (loot) editor ---- */
+.contents-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.ct-row { display: flex; align-items: center; gap: 6px; }
+.ct-item { flex: 1; min-width: 0; padding: 7px 10px; background: #141310; border: 1px solid #3a3833; border-radius: 6px; color: #e8e2d6; font-size: 13px; }
+.ct-item::placeholder { color: #6b665c; }
+.ct-qty { width: 60px; flex: none; padding: 7px 8px; background: #141310; border: 1px solid #3a3833; border-radius: 6px; color: #e8e2d6; font-size: 13px; text-align: center; }
+.ct-del { width: 30px; height: 30px; flex: none; border-radius: 6px; border: 1px solid #3a3833; background: #26241f; color: #a55; font-size: 13px; cursor: pointer; }
+.ct-del:hover { border-color: #a55; }
+.ct-add { align-self: flex-start; margin-top: 2px; }
 
 /* ---- import / export ---- */
 .lock-io { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }

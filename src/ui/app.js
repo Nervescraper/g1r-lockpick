@@ -6,7 +6,7 @@ import { findCycles } from '../cycles.js';
 import { createMapping, recommendNext, allMapped } from '../discovery.js';
 import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
-  exportLocks, encodeShare, parseImport, classifyImport, sameIdentity,
+  exportLocks, encodeShare, parseImport, classifyImport, sameIdentity, sanitizeContents,
 } from '../storage.js';
 
 const store = window.localStorage;
@@ -41,20 +41,21 @@ function freshSetup(n) {
     location: '',
     kind: 'Chest',
     description: '',
+    contents: [],
     lockId: undefined,
     lockLoaded: false,
   };
 }
 
 function persist() {
-  const { n, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart } = state;
-  // The import screen is a transient overlay over the Lock step — never persist it as a
-  // saved session stage (a reload mid-import would otherwise restore an empty import view).
-  const stage = state.stage === 'import' ? 'lock' : state.stage;
+  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart } = state;
+  // The import and contents screens are transient overlays over the Lock step — never
+  // persist them as a saved session stage (a reload would otherwise restore an empty one).
+  const stage = state.stage === 'import' || state.stage === 'contents' ? 'lock' : state.stage;
   // While editing positions in Solve, changes stay pending until Apply — persist the
   // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
   const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
-  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart });
+  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart });
   syncLock();
 }
 
@@ -102,6 +103,9 @@ function syncLock() {
     initial: (state.initial || state.positions).slice(),
     coupling: state.mapping ? state.mapping.coupling : null,
     status: state.mapping ? state.mapping.status : null,
+    // Stored clean (blank rows dropped, qty coerced) so the saved record and its exports
+    // never carry an in-progress blank row — while state.contents keeps what's on screen.
+    contents: sanitizeContents(state.contents),
     notes: '',
   });
 }
@@ -189,6 +193,8 @@ function render() {
     wrap.appendChild(lockStep());
   } else if (state.stage === 'import') {
     wrap.appendChild(importView());
+  } else if (state.stage === 'contents') {
+    wrap.appendChild(contentsView());
   } else if (state.stage === 'discovery') {
     wrap.appendChild(mappingView());
   } else {
@@ -412,6 +418,62 @@ function namingWidgetHtml() {
     <div id="name-warning">${nameWarningHtml()}</div>`;
 }
 
+// The contents (loot) list is edited in two places — the Solve "Lock open!" screen
+// (state.contents) and a saved lock's dedicated editor (state.contentsEdit.items). This
+// returns whichever array the current screen is editing so the row handlers stay shared.
+function activeContents() {
+  return state.stage === 'contents' ? state.contentsEdit.items : state.contents;
+}
+
+// Write the edited contents back to its lock record, cleaned. The on-screen buffer keeps
+// any blank/in-progress row (the UI renders from it), but the stored record never does.
+function persistContents() {
+  if (state.stage === 'contents') {
+    const base = getLock(store, state.contentsEdit.id);
+    if (base) saveLock(store, { ...base, contents: sanitizeContents(state.contentsEdit.items) });
+  } else {
+    persist(); // syncLock writes sanitizeContents(state.contents) to the session lock
+  }
+}
+
+// The item/quantity row editor, shared by the success screen and the saved-lock editor.
+function contentsEditorHtml(items) {
+  const rows = (items || [])
+    .map((c, i) => {
+      const qty = Number.isFinite(c.qty) && c.qty >= 1 ? Math.floor(c.qty) : 1;
+      return `<div class="ct-row">
+        <input class="ct-item" type="text" data-action="content-item" data-i="${i}" placeholder="Item…" value="${escapeHtml(c.item || '')}" />
+        <input class="ct-qty" type="number" min="1" step="1" inputmode="numeric" data-action="content-qty" data-i="${i}" value="${qty}" />
+        <button class="ct-del" data-action="content-del" data-i="${i}" title="Remove item" aria-label="Remove item">✕</button>
+      </div>`;
+    })
+    .join('');
+  return `<div class="contents-editor">${rows}<button class="ap-btn ct-add" data-action="content-add">＋ Add item</button></div>`;
+}
+
+// A compact "2× Gold · 1× Sword" line for a saved lock; '' when it has no recorded loot.
+function contentsSummary(l) {
+  const items = (Array.isArray(l.contents) ? l.contents : []).filter((c) => c && String(c.item || '').trim());
+  if (!items.length) return '';
+  return items.map((c) => `${c.qty}× ${escapeHtml(String(c.item).trim())}`).join(' · ');
+}
+
+// The dedicated editor for a saved lock's contents, reached by the ✎ icon in its row.
+function contentsView() {
+  const ed = state.contentsEdit;
+  const lock = ed ? getLock(store, ed.id) : null;
+  const col = document.createElement('div');
+  col.className = 'lock-col import-col';
+  const card = document.createElement('div');
+  card.className = 'ap-card';
+  card.innerHTML = `<div class="ap-h">Contents</div>
+    <div class="muted" style="margin-bottom:10px">${escapeHtml(lock ? lock.name : 'Lock')}</div>
+    ${contentsEditorHtml(ed.items)}
+    <div style="margin-top:14px"><span class="ap-btn primary" data-action="contents-done">‹ Back to locks</span></div>`;
+  col.appendChild(card);
+  return col;
+}
+
 // First step: EITHER load a saved lock (left) OR start a new one (right).
 function lockStep() {
   const holder = document.createElement('div');
@@ -466,14 +528,17 @@ function lockRowHtml(l) {
             <span class="share-copied muted"></span></div>
         </div>`
       : '';
+  const summary = contentsSummary(l);
   return `<div class="lock-row">
     <div class="lock-item">
       <span data-action="load-lock" data-id="${l.id}" style="cursor:pointer">${escapeHtml(l.name)} <span class="muted">(${l.n} plates)</span></span>
       <span class="lock-acts">
+        <span class="io" data-action="edit-contents" data-id="${l.id}" title="Edit contents">✎</span>
         <span class="io" data-action="share-lock" data-id="${l.id}" title="Share this lock">⇪</span>
         <span class="x" data-action="del-lock" data-id="${l.id}">✕</span>
       </span>
     </div>
+    ${summary ? `<div class="lock-contents muted">${summary}</div>` : ''}
     ${panel}
   </div>`;
 }
@@ -493,9 +558,11 @@ function lockSummaryHtml(l) {
   const loc = (l.location || '').trim();
   const desc = (l.description || '').trim();
   const sub = [loc, l.kind || 'Chest', desc].filter(Boolean).join(' · ');
+  const summary = contentsSummary(l);
   return `<div class="cf-name">${escapeHtml(l.name || 'Unnamed lock')}</div>
     <div class="muted">${escapeHtml(sub)}</div>
-    <div class="muted">${l.n} plates · ${lockStatusWord(l)}</div>`;
+    <div class="muted">${l.n} plates · ${lockStatusWord(l)}</div>
+    ${summary ? `<div class="muted">Contents: ${summary}</div>` : ''}`;
 }
 
 // The import screen: a paste/file input, then a results summary with a per-conflict
@@ -856,7 +923,9 @@ function solvePanel(side, boardProps) {
     card.innerHTML = `<div class="success">✓ Lock open!</div>
       <div class="muted" style="margin-top:6px">Every pin is at the center (4).</div>
       <div class="ap-h" style="margin-top:14px">Save this lock <span class="muted" style="text-transform:none;letter-spacing:0">— name it and it's kept automatically</span></div>
-      ${namingWidgetHtml()}`;
+      ${namingWidgetHtml()}
+      <div class="ap-h" style="margin-top:16px">Contents <span class="muted" style="text-transform:none;letter-spacing:0">— note what's inside (optional)</span></div>
+      ${contentsEditorHtml(state.contents)}`;
     side.appendChild(card);
     if (state.plan.length) side.appendChild(planCardEl());
     return boardProps;
@@ -1027,6 +1096,7 @@ appEl.addEventListener('click', (e) => {
         state.location = lock.location ?? lock.name ?? '';
         state.kind = lock.kind ?? 'Chest';
         state.description = lock.description ?? '';
+        state.contents = (Array.isArray(lock.contents) ? lock.contents : []).map((c) => ({ ...c }));
         // jump straight to whatever step is next: Solve if fully mapped, else resume mapping
         state.stage = state.lockLoaded ? 'solve' : 'discovery';
         state.editing = false;
@@ -1052,13 +1122,24 @@ appEl.addEventListener('click', (e) => {
       if (!window.confirm(`Delete ${lock ? `"${lock.name}"` : 'this lock'}? This can't be undone.`)) break;
       deleteLock(store, id);
       if (state.shareId === id) state.shareId = undefined;
-      if (state.lockId === id) { state.lockId = undefined; state.location = ''; state.kind = 'Chest'; state.description = ''; }
+      if (state.lockId === id) { state.lockId = undefined; state.location = ''; state.kind = 'Chest'; state.description = ''; state.contents = []; }
       break;
     }
     case 'export-all': exportAllLocks(); return; // download only — no re-render needed
     case 'share-lock': state.shareId = state.shareId === t.dataset.id ? undefined : t.dataset.id; break;
     case 'close-share': state.shareId = undefined; break;
     case 'copy-share': copyShareCode(t); return;
+    case 'content-add': activeContents().push({ item: '', qty: 1 }); persistContents(); break;
+    case 'content-del': activeContents().splice(+t.dataset.i, 1); persistContents(); break;
+    case 'edit-contents': {
+      const lock = getLock(store, t.dataset.id);
+      if (lock) {
+        state.stage = 'contents';
+        state.contentsEdit = { id: lock.id, items: (Array.isArray(lock.contents) ? lock.contents : []).map((c) => ({ ...c })) };
+      }
+      break;
+    }
+    case 'contents-done': state.stage = 'lock'; state.contentsEdit = undefined; break;
     case 'import-open': state.stage = 'import'; state.import = { phase: 'input' }; break;
     case 'import-parse': runImportParse(); break;
     case 'import-apply': runImportApply(); break;
@@ -1078,6 +1159,19 @@ appEl.addEventListener('input', (e) => {
     state.import.fileText = undefined;
     state.import.fileName = undefined;
     state.import.error = undefined;
+    return;
+  }
+  // Contents item/quantity edits — update the active buffer and save without re-rendering
+  // (keeps focus). The buffer may hold a blank/partial row; persistContents stores it clean.
+  const ctItem = e.target.closest('[data-action="content-item"]');
+  const ctQty = e.target.closest('[data-action="content-qty"]');
+  if (ctItem || ctQty) {
+    const arr = activeContents();
+    const row = arr && arr[+(ctItem || ctQty).dataset.i];
+    if (!row) return;
+    if (ctItem) row.item = e.target.value;
+    else { const v = e.target.value; row.qty = v === '' ? '' : Number(v); }
+    persistContents();
     return;
   }
   // update text fields + autosave without re-rendering (keeps the input focused)

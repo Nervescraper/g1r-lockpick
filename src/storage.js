@@ -93,10 +93,35 @@ export function parseImport(text) {
   const locks = [];
   let invalidCount = 0;
   for (const l of env.locks) {
-    if (isValidLock(l)) locks.push(l);
+    if (isValidLock(l)) locks.push(withCleanContents(l));
     else invalidCount++;
   }
   return { locks, invalidCount };
+}
+
+// The contents (loot) list is free-form metadata, so it never gates a lock's validity.
+// But external/older exports may carry malformed entries — clean them on the way in.
+// Only touch records that actually declare contents, so locks without the field
+// round-trip byte-for-byte.
+function withCleanContents(l) {
+  if (!('contents' in l)) return l;
+  return { ...l, contents: sanitizeContents(l.contents) };
+}
+
+// Normalize a contents list to [{ item: string, qty: int>=1 }]: trim item text, drop
+// blank-item rows, floor/clamp quantities to a positive integer (default 1). Non-array
+// input yields []. Exported so the UI can apply the same rule at its edit commit points.
+export function sanitizeContents(contents) {
+  if (!Array.isArray(contents)) return [];
+  const out = [];
+  for (const e of contents) {
+    if (!e || typeof e !== 'object') continue;
+    const item = String(e.item ?? '').trim();
+    if (!item) continue;
+    const q = Math.floor(Number(e.qty));
+    out.push({ item, qty: Number.isFinite(q) && q >= 1 ? q : 1 });
+  }
+  return out;
 }
 
 function readEnvelope(text) {
