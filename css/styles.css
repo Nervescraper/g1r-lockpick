@@ -33,9 +33,10 @@ body {
 .kind-opt input { accent-color: var(--gold); }
 
 /* ---- layout ---- */
-.ap-main { display: flex; gap: 20px; align-items: flex-start; }
-.ap-board { flex: 1 1 54%; min-width: 360px; }
-.ap-side { flex: 1 1 46%; min-width: 300px; }
+.ap-main { display: flex; gap: 16px; align-items: flex-start; justify-content: center; }
+.ap-board { flex: 0 1 auto; } /* shrink to the board so it sits next to the panel */
+.ap-side { flex: 0 1 460px; min-width: 300px; }
+.ap-locktitle { text-align: center; color: var(--gold); font-size: 14px; letter-spacing: 1px; margin: -6px 0 12px; }
 @media (max-width: 760px) { .ap-main { flex-direction: column; } }
 
 .ap-boardtop { display: flex; justify-content: flex-end; min-height: 24px; }

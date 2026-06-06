@@ -137,6 +137,13 @@ function render() {
   bar.appendChild(over);
   wrap.appendChild(bar);
 
+  if ((state.location || '').trim() || (state.description || '').trim()) {
+    const title = document.createElement('div');
+    title.className = 'ap-locktitle';
+    title.textContent = composeName();
+    wrap.appendChild(title);
+  }
+
   if (state.stage === 'discovery') {
     wrap.appendChild(mappingView());
   } else {
@@ -435,7 +442,7 @@ function couplingCard(coupling) {
         )
         .filter(Boolean)
         .join('');
-      return `<div class="cpl-card"><span class="mv">Press <b>${plateLabel(i)}</b></span><span>${chips || '<span class="muted">— no links</span>'}</span></div>`;
+      return `<div class="cpl-card"><span class="mv">Slide <b>${plateLabel(i)}</b></span><span>${chips || '<span class="muted">— no links</span>'}</span></div>`;
     })
     .join('');
   card.innerHTML = `<div class="ap-h">Connections · reference</div>${rows}`;
@@ -546,11 +553,13 @@ appEl.addEventListener('click', (e) => {
         state.location = lock.location ?? lock.name ?? '';
         state.kind = lock.kind ?? 'Chest';
         state.description = lock.description ?? '';
-        state.stage = 'setup';
+        // jump straight to whatever step is next: Solve if fully mapped, else resume mapping
+        state.stage = state.lockLoaded ? 'solve' : 'discovery';
         state.editing = false;
         state.plan = undefined;
         state.activePlate = undefined;
         state.rel = {};
+        if (state.stage === 'discovery') suggestDefault();
       }
       break;
     }
