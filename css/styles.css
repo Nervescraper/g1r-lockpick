@@ -39,6 +39,8 @@ body {
 .ap-board { flex: 0 0 auto; } /* board keeps its natural width on the left */
 .ap-side { flex: 1 1 auto; min-width: 300px; } /* panel grows to the shared right edge */
 .ap-locktitle { text-align: center; color: var(--gold); font-size: 14px; letter-spacing: 1px; margin: -6px 0 12px; }
+.lock-intro { text-align: center; color: #8a8378; font-size: 13px; margin: 0 0 12px; }
+.lock-col { flex: 1 1 0; min-width: 280px; }
 @media (max-width: 760px) { .ap-main { flex-direction: column; } }
 
 .ap-boardtop { display: flex; justify-content: flex-end; min-height: 24px; }

@@ -22,7 +22,7 @@ function restore() {
 
 function freshSetup(n) {
   return {
-    stage: 'setup',
+    stage: 'lock',
     n,
     positions: Array(n).fill(GOAL),
     initial: null,
@@ -144,7 +144,9 @@ function render() {
     wrap.appendChild(title);
   }
 
-  if (state.stage === 'discovery') {
+  if (state.stage === 'lock') {
+    wrap.appendChild(lockStep());
+  } else if (state.stage === 'discovery') {
     wrap.appendChild(mappingView());
   } else {
     const main = document.createElement('div');
@@ -173,9 +175,9 @@ function render() {
 function railEl() {
   const rail = document.createElement('div');
   rail.className = 'ap-rail';
-  const stages = [['setup', 'Setup'], ['discovery', 'Map the lock'], ['solve', 'Solve']];
-  const order = { setup: 0, discovery: 1, solve: 2 };
-  const navigable = { setup: true, discovery: !!state.mapping, solve: !!state.mapping };
+  const stages = [['lock', 'Lock'], ['setup', 'Setup'], ['discovery', 'Map the lock'], ['solve', 'Solve']];
+  const order = { lock: 0, setup: 1, discovery: 2, solve: 3 };
+  const navigable = { lock: true, setup: true, discovery: !!state.mapping, solve: !!state.mapping };
   for (const [key, label] of stages) {
     const span = document.createElement('span');
     span.textContent = (order[state.stage] > order[key] ? '✓ ' : '') + label;
@@ -209,37 +211,9 @@ function positionRows() {
     .join('');
 }
 
-function setupPanel() {
-  const card = document.createElement('div');
-  card.className = 'ap-card';
-  const locks = loadLocks(store).filter((l) => l.id !== state.lockId); // exclude the one being worked on
-  const lockListHtml = locks.length
-    ? `<div class="ap-h" style="margin-top:14px">Saved locks</div><div class="lock-list">${locks
-        .map(
-          (l) =>
-            `<div class="lock-item"><span data-action="load-lock" data-id="${l.id}" style="cursor:pointer">${escapeHtml(
-              l.name
-            )} <span class="muted">(${l.n} plates)</span></span><span class="x" data-action="del-lock" data-id="${l.id}">✕</span></div>`
-        )
-        .join('')}</div>`
-    : '';
-
-  const primary = state.lockLoaded
-    ? `<span class="ap-btn primary" data-action="goto-solve">Solve ›</span>`
-    : `<span class="ap-btn primary" data-action="start-mapping">Start mapping ›</span>`;
-
-  card.innerHTML = `
-    <div class="ap-h">New lock${state.lockLoaded ? ` — ${escapeHtml(composeName())} loaded` : ''}</div>
-    <div class="cnt">
-      <span class="muted">Plates</span>
-      <button class="step" data-action="n-dec">−</button>
-      <span class="num">${state.n}</span>
-      <button class="step" data-action="n-inc">+</button>
-      <span class="muted">(${N_MIN}–${N_MAX})</span>
-    </div>
-    <div class="ap-h">Current pin position of each plate <span class="muted" style="text-transform:none;letter-spacing:0">— this is saved as the lock's reset point</span></div>
-    ${positionRows()}
-    <div class="ap-h" style="margin-top:14px">Save this lock (optional)</div>
+// The location/type/description fields, reused on the Lock step.
+function namingWidgetHtml() {
+  return `
     <div class="muted" style="margin-bottom:4px">General location</div>
     <div class="fill-row">
       ${['Old Camp', 'New Camp', 'Swamp Camp', 'Orc Camp']
@@ -253,13 +227,71 @@ function setupPanel() {
         .map((k) => `<label class="kind-opt" data-action="kind-set" data-kind="${k}"><input type="radio" name="kind" ${state.kind === k ? 'checked' : ''}/> ${k}</label>`)
         .join('')}
     </div>
-    <div class="muted" style="margin:10px 0 4px">Description</div>
-    <input class="lock-name-input" type="text" data-action="desc-input" placeholder="e.g. behind the throne" value="${escapeHtml(state.description || '')}" />
-    <div class="muted" style="margin-top:4px">Locks with a location or description save automatically and appear below.</div>
-    <div style="margin-top:12px">${primary}
-      ${state.lockLoaded ? '<span class="ap-btn" data-action="new-lock">Start a new lock</span>' : ''}
+    <div class="muted" style="margin:10px 0 4px">Description (optional)</div>
+    <input class="lock-name-input" type="text" data-action="desc-input" placeholder="e.g. behind the throne" value="${escapeHtml(state.description || '')}" />`;
+}
+
+// First step: EITHER load a saved lock (left) OR start a new one (right).
+function lockStep() {
+  const holder = document.createElement('div');
+  const intro = document.createElement('div');
+  intro.className = 'lock-intro';
+  intro.textContent = 'Either load a saved lock, or start a new one.';
+  holder.appendChild(intro);
+
+  const main = document.createElement('div');
+  main.className = 'ap-main';
+
+  const locks = loadLocks(store).filter((l) => l.id !== state.lockId);
+  const left = document.createElement('div');
+  left.className = 'lock-col';
+  left.innerHTML = `<div class="ap-card">
+    <div class="ap-h">Load a saved lock</div>
+    ${locks.length
+      ? `<div class="lock-list">${locks
+          .map(
+            (l) =>
+              `<div class="lock-item"><span data-action="load-lock" data-id="${l.id}" style="cursor:pointer">${escapeHtml(
+                l.name
+              )} <span class="muted">(${l.n} plates)</span></span><span class="x" data-action="del-lock" data-id="${l.id}">✕</span></div>`
+          )
+          .join('')}</div>`
+      : '<div class="muted">No saved locks yet — start a new one on the right →</div>'}
+  </div>`;
+
+  const right = document.createElement('div');
+  right.className = 'lock-col';
+  right.innerHTML = `<div class="ap-card">
+    <div class="ap-h">Or start a new lock</div>
+    ${namingWidgetHtml()}
+    <div class="muted" style="margin-top:6px">Naming is optional — you can fill this in later. It auto-saves.</div>
+    <div style="margin-top:12px"><span class="ap-btn primary" data-action="new-setup">Continue to setup ›</span></div>
+  </div>`;
+
+  main.appendChild(left);
+  main.appendChild(right);
+  holder.appendChild(main);
+  return holder;
+}
+
+function setupPanel() {
+  const card = document.createElement('div');
+  card.className = 'ap-card';
+  const primary = state.lockLoaded
+    ? `<span class="ap-btn primary" data-action="goto-solve">Solve ›</span>`
+    : `<span class="ap-btn primary" data-action="start-mapping">Start mapping ›</span>`;
+  card.innerHTML = `
+    <div class="ap-h">Plates &amp; initial pins</div>
+    <div class="cnt">
+      <span class="muted">Plates</span>
+      <button class="step" data-action="n-dec">−</button>
+      <span class="num">${state.n}</span>
+      <button class="step" data-action="n-inc">+</button>
+      <span class="muted">(${N_MIN}–${N_MAX})</span>
     </div>
-    ${lockListHtml}
+    <div class="ap-h">Current pin position of each plate <span class="muted" style="text-transform:none;letter-spacing:0">— saved as the lock's reset point</span></div>
+    ${positionRows()}
+    <div style="margin-top:12px">${primary}</div>
   `;
   return card;
 }
@@ -483,9 +515,11 @@ appEl.addEventListener('click', (e) => {
       suggestDefault();
       break;
     case 'goto-solve': state.stage = 'solve'; state.editing = false; state.plan = undefined; break;
+    case 'new-setup': state.stage = 'setup'; break;
     case 'goto-stage': {
       const target = t.dataset.stage;
-      if (target === 'setup') { state.stage = 'setup'; state.editing = false; }
+      if (target === 'lock') state.stage = 'lock';
+      else if (target === 'setup') { state.stage = 'setup'; state.editing = false; }
       else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; suggestDefault(); }
       else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.editing = false; state.plan = undefined; }
       break;

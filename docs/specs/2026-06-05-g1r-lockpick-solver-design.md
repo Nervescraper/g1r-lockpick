@@ -40,16 +40,19 @@ We do **not** assume `E_i[i] = +1` or any symmetry; the app records exactly what
 
 ## 3. What the app does
 
-Three stages share one screen frame (stage rail on top, board on the left, context panel
-on the right):
+Four stages share one screen frame (a clickable stage rail on top):
 
-1. **Setup** — enter the plate count and each plate's current pin position.
-2. **Map the lock (Discovery)** — a guided wizard helps the player probe each plate and
-   record its coupling, ordering probes to avoid breaking a pick.
-3. **Solve (play-along)** — compute a safe move sequence to bring all pins to 4 and walk
-   the player through it move by move, tracking live positions.
+1. **Lock** — **either** load a saved lock (list on the left) **or** start a new one by
+   naming it (General location with quick-fill camp buttons, Chest/Door/Other type, and an
+   optional description, on the right).
+2. **Setup** — set the plate count and each plate's initial pin position (the reset point).
+3. **Map the lock (Discovery)** — the player records each plate's connections by clicking it
+   and marking how the others move (with / opposite).
+4. **Solve (play-along)** — compute a safe move sequence to bring all pins to 4 and walk the
+   player through it move by move.
 
-Locks can be saved and reloaded so a previously mapped chest skips straight to Solve.
+Saved locks reload from the Lock step and jump straight to whatever step is next (Solve if
+fully mapped, otherwise mapping). The stage badges are clickable to move between steps.
 
 ## 4. Core model and solver
 
@@ -143,6 +146,10 @@ yet**, and a plate's row can be revisited and revised by clicking it again.
 
 ### 6.2 Stage panels (right side)
 
+- **Lock:** two columns — a saved-locks list (load/delete) on the left, and the naming
+  widget (location quick-fill buttons + free text, Chest/Door/Other, description) on the
+  right — with an "either load or start new" intro. The lock being worked on is excluded
+  from its own list.
 - **Setup:** plate-count stepper (3–8); a 1–7 position picker per plate (goal hole marked);
   the board previews positions live. "Start mapping."
 - **Discovery (unified into the board):** click any plate row to select it (highlighted);
