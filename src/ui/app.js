@@ -207,6 +207,7 @@ function render() {
 
   appEl.appendChild(wrap);
   reserveMoveDescHeight();
+  fitPlanList();
   scrollCurrentStepIntoView();
   persist();
 }
@@ -228,6 +229,41 @@ function reserveMoveDescHeight() {
   }
   sub.textContent = original;
   sub.style.minHeight = `${max}px`;
+}
+
+// Grow the plan list to fill the leftover viewport height so the page itself
+// doesn't scroll unless the layout genuinely can't fit. Collapse the list, measure
+// how much vertical slack remains, then hand that slack back to the list (with a
+// floor so very short windows stay usable — there the page scrolls, as it must).
+function fitPlanList() {
+  const main = appEl.querySelector('.ap-main');
+  const side = appEl.querySelector('.ap-side');
+  const footer = appEl.querySelector('.ap-footer');
+  const list = appEl.querySelector('.ap-steplist');
+  if (!main || !side || !footer || !list) return;
+
+  list.style.maxHeight = '0px'; // collapse, then measure everything around it
+  // The tallest column sets the page height; the side column should grow (via the
+  // list) until the page bottom meets the viewport. Body has min-height:100vh, so
+  // measure real element rects rather than scrollHeight.
+  const vp = window.innerHeight;
+  const mainTop = main.getBoundingClientRect().top;
+  const footerSpan = footer.getBoundingClientRect().bottom - main.getBoundingClientRect().bottom; // footer + its margin
+  const sideBase = side.getBoundingClientRect().height; // side height with the list collapsed
+  const maxMain = vp - mainTop - footerSpan - 1; // tallest the columns can be and still fit
+  // Grow the list so the side column reaches maxMain. Clamp to a small floor; when
+  // the window is too short to fit even that, a page scrollbar is unavoidable.
+  let h = Math.max(64, maxMain - sideBase);
+  list.style.maxHeight = `${h}px`;
+
+  // Self-correct any residual overflow the rect math missed (sub-pixel rounding,
+  // a fractionally taller board column): if the page still overflows, trim the
+  // list by exactly that much. min-height:100vh keeps scrollHeight == innerHeight
+  // when content fits, so this only fires on genuine overflow.
+  const overflow = document.documentElement.scrollHeight - window.innerHeight;
+  if (overflow > 0 && h - overflow >= 64) {
+    list.style.maxHeight = `${h - overflow}px`;
+  }
 }
 
 // Keep the current plan step one line down from the top of the steplist, so the
@@ -799,5 +835,7 @@ window.addEventListener('keydown', (e) => {
   state.positions = computeSolvePositions();
   render();
 });
+
+window.addEventListener('resize', fitPlanList);
 
 render();
