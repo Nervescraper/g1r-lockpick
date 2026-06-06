@@ -164,3 +164,21 @@ body {
 .ap-legend .right { color: var(--shr); }
 .success { color: var(--goal); font-size: 20px; font-weight: 700; }
 .flash { color: var(--goal); font-size: 12px; margin-left: 8px; }
+
+/* ===== flat board + unified mapping ===== */
+.tp-2d { max-width: 640px; margin: 0 auto; }
+.tp-2d .tp-2drow { justify-content: flex-start; gap: 12px; }
+.tp-2drow.selectable .tp-2dlabel, .tp-2drow.selectable .tp-2dholes { cursor: pointer; }
+.tp-2drow.active2d .tp-2dholes { box-shadow: 0 0 0 2px var(--gold), inset 0 1px 0 #6a6e74; }
+.tp-2dright { margin-left: auto; flex: 0 0 auto; }
+.map-wrap { max-width: 680px; margin: 0 auto; }
+
+.rel { display: flex; gap: 6px; }
+.rel-btn { font-size: 11px; padding: 5px 10px; border: 1px solid #333; border-radius: 6px; color: #999; cursor: pointer; white-space: nowrap; }
+.rel-btn:hover { border-color: #555; }
+.rel-btn.on-with { background: #1b2e1d; border-color: #2f5c37; color: var(--goal); font-weight: 600; }
+.rel-btn.on-opp { background: #2e1b18; border-color: #5c2f24; color: var(--danger); font-weight: 600; }
+.self-note { font-size: 12px; color: #8a8378; font-style: italic; border: 1px dashed #3a3833; border-radius: 6px; padding: 5px 12px; white-space: nowrap; }
+
+.chip.with { color: var(--goal); border-color: #2f5c37; }
+.chip.opp { color: var(--danger); border-color: #5c2f24; }

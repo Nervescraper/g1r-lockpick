@@ -79,28 +79,25 @@ durability and reveal nothing).
 
 ### 5.1 Probing
 
-To map plate `i`: in-game, select plate `i` and press Left (or Right) once, observe which
-plates shift and in which direction, and record it. Each probe is a **real move** — the
-app applies the observed shifts to its tracked positions. **No reset is needed** between
-probes.
+To map plate `i`: select plate `i` in the app, press it once in-game (either direction),
+and record which other plates move **with** it or **opposite** to it. Mapping records
+*relationships only* — it does **not** track live pin positions (pressing plates moves them
+in-game). The player sets the actual current positions at the **Solve** stage.
 
 ### 5.2 Recording
 
-- The **active plate appears as a non-interactive placeholder** in the recorder (so the
-  list keeps its order), not as a markable option: pressing a plate always moves that
-  plate's own pin by the press direction, so its self-shift is recorded automatically
-  (its coupling diagonal is +1 in the Left frame). The player only marks the **other**
-  plates they saw move.
-- For each other plate the player marks **◀ left** (+1) or **▶ right** (−1), or leaves it
-  unmarked. There is no explicit "none" button: on a successful (**Moved**) probe every
-  side-effect shifts visibly, so unmarked plates are taken as no-connection and the whole
-  row is (re)written on save — which also lets the player **correct a mistake** by
-  re-selecting the plate and un-marking it.
-- A probe's outcome is **Moved** or **Blocked**. A **Blocked** attempt is *not* saved (it
-  reveals nothing and would wrongly imply zeros), so confirmed zeros only ever come from a
-  Moved probe.
-- Re-selecting a plate **restores its recorded marks** so the player can review or fix it.
-  Because the coupling is fixed, a saved row stays valid until deliberately changed.
+- Connections are recorded **relative to the plate you press**, not as absolute left/right:
+  for each *other* plate the player picks **Moves with** (same direction, coupling +1) or
+  **Moves opposite** (the reverse, coupling −1), or leaves it blank (no connection). Being
+  relative, this sidesteps the "which way did I press" question entirely.
+- The **active plate is a non-interactive placeholder** — it always moves itself, so its
+  diagonal is +1 and it is never a markable option.
+- Saving **rewrites the whole row** (a clean press reveals every link at once), so unmarked
+  plates are taken as no-connection and a mistake is fixed by re-selecting the plate and
+  toggling a button off. Re-selecting **restores** the stored selections.
+- A press that **jams at an edge** reveals nothing (only the stuck plate shakes); the player
+  presses the other way or moves the plate toward center first, then maps it — so confirmed
+  zeros only come from a clean, unblocked press.
 
 ### 5.3 Risk-aware sequencing
 
@@ -137,25 +134,22 @@ yet**, and a plate's row can be revisited and revised by clicking it again.
 
 ### 6.1 Board visualization
 
-- A 3D isometric render mirroring the in-game look: plates are slabs with **holes on the
-  top face** and **pins poking up**; the stack **recedes up and to the right**, front plate
-  nearest. Goal hole (4) on each plate is marked with a **dashed rectangle**; the pin is an
-  amber dot, green when that plate is at the goal.
-- **Plate labels are upright flat text** in a left gutter (never part of the angled view).
-  Each label is positioned by **measuring its plate's rendered box** (`getBoundingClientRect`)
-  and parking the label at that height; re-run on load and resize. This keeps labels aligned
-  for any plate count, perspective, or window size — no hardcoded offsets.
-- A **"2D view" checkbox** swaps the isometric board for a plain flat stack of rows for
-  maximum legibility.
+- A flat 2D board: one row per plate, drawn **P_n (top) → P1 (bottom)** to match the game's
+  front-at-bottom orientation. Each row is a strip of 7 holes; the goal hole (4) is marked
+  with a **dashed rectangle**, the pin is an amber dot (green when that plate is at the
+  goal). (An earlier isometric/3D render and a 2D toggle were dropped as unhelpful.)
+- The board doubles as the **mapping surface** (§6.2): in the Map stage the rows are
+  clickable and carry the per-plate mapping controls inline.
 
 ### 6.2 Stage panels (right side)
 
 - **Setup:** plate-count stepper (3–8); a 1–7 position picker per plate (goal hole marked);
   the board previews positions live. "Start mapping."
-- **Discovery:** click any plate on the board to record it (the active plate is highlighted);
-  a Left/Right direction toggle with a safety badge ("✓ won't block" / "⚠ risky"); **Moved /
-  Blocked** outcome; per-plate **◀ left / ▶ right** recorder; blocked-probe guidance; "Save";
-  a non-blocking "Suggested" hint for the next safe plate; per-plate progress dots.
+- **Discovery (unified into the board):** click any plate row to select it (highlighted);
+  each *other* row then shows **Moves with** / **Moves opposite** buttons, and the active row
+  shows a non-interactive placeholder. "Save plate" stores the row and marks it mapped; a
+  non-blocking "Suggested" hint points at the next safe plate; progress dots show mapped /
+  not-yet; a note explains the edge-jam caveat.
 - **Solve:** big **next move** callout (e.g. `P4 → Left ✓ safe`) with what it shifts and
   edge-safety; **Back / Did it › / Edit positions** controls; the full **plan** as a step
   list with the current step highlighted; durability and projected breaks (0); a **coupling
