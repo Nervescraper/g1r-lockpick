@@ -1,0 +1,100 @@
+# Solver Optimality & the 8-Plate Cap (future-work note)
+
+**Status:** Not actioned — captured for reference. The current solver is fine for 3–7
+plates and almost always fine for 8. Revisit only if an 8-plate lock ever reports a false
+"No solution," or if we want an unconditional guarantee.
+
+## What we have today
+
+`src/solver.js` is a **breadth-first search** over position vectors. It is **optimal
+(fewest moves)** whenever it returns a plan, because:
+
+- Every move costs exactly 1 (one Left/Right slide of one plate), so "fastest" = "fewest
+  moves" — a single uniform-cost metric.
+- BFS expands states in non-decreasing depth order, so the goal is first reached via a
+  shortest path (`solver.js` returns the instant `isSolved` is true).
+- The `visited` set records each state at its first (shortest) discovery, so it never
+  discards a shorter route.
+
+It also never returns a *sub*-optimal plan: if it can't finish, it returns `null`.
+
+## The caveat
+
+There is a safety guard `maxNodes = 2_000_000`. The reachable state space is `7^n`:
+
+| Plates | States (7ⁿ) | vs. 2,000,000 cap |
+|--------|-------------|-------------------|
+| ≤ 7    | ≤ 823,543   | always fits → complete + optimal |
+| 8      | 5,764,801   | a worst-case 8-plate lock can hit the cap and return `null` even though a solution exists |
+
+So for **8 plates** the solver is still optimal *if it answers*, but a pathologically hard
+case could give up. In practice solutions are found after exploring a tiny fraction of the
+space, so this is very unlikely to be observed — but it is a real gap.
+
+## Option A — bump the cap (quick)
+
+Raise `maxNodes` to at least `7 ** N_MAX` (≈ 5.76M for 8 plates) so BFS can always exhaust
+the space.
+
+- Pros: one-line change, preserves the exact current behavior/optimality.
+- Cons: a worst-case 8-plate solve could hold up to ~5.76M visited keys (string vectors)
+  in memory and take noticeably longer. Heavy but tolerable for a one-off solve; could be
+  sluggish in a browser tab.
+
+## Option B — switch BFS → A\* (recommended)
+
+Replace the FIFO queue with a priority queue keyed by `f = g + h`, where `g` is moves so
+far and `h` is an **admissible** heuristic. A\* with an admissible (and ideally consistent)
+heuristic is still optimal, but explores far fewer states, so even worst-case 8-plate locks
+become fast and light.
+
+**Admissible heuristic:** `h(pos) = max_i |pos[i] − 4|`.
+
+- Justification: a single move changes any one plate's pin by at most 1 (each move shifts
+  the selected plate by ±1 and other plates by at most ±1). So to bring the worst-offset
+  plate to 4 you need at least `max_i |pos[i] − 4|` moves. Hence `h` never overestimates →
+  admissible. It is also consistent (each move changes `h` by at most 1).
+- This heuristic is weak when coupling lets several plates converge together, but it's
+  safe, and even a weak admissible heuristic prunes BFS dramatically near the goal.
+
+**Sketch:**
+
+```js
+// binary min-heap of {key, pos, g, f}; visited keyed by pos.join(',')
+function solve(positions, coupling) {
+  if (isSolved(positions)) return [];
+  const h = (p) => Math.max(...p.map((v) => Math.abs(v - 4)));
+  const start = positions.slice();
+  const open = new MinHeap();                 // ordered by f
+  const g = new Map([[start.join(','), 0]]);
+  const parent = new Map();
+  open.push({ pos: start, f: h(start), g: 0 });
+  while (!open.empty()) {
+    const { pos, g: gc } = open.pop();
+    const key = pos.join(',');
+    if (gc > g.get(key)) continue;            // stale heap entry
+    if (isSolved(pos)) return reconstruct(parent, key, start.join(','));
+    for (const mv of legalMoves(pos, coupling)) {
+      const np = applyMove(pos, coupling, mv.plate, mv.dir);
+      const nk = np.join(',');
+      const ng = gc + 1;
+      if (ng < (g.get(nk) ?? Infinity)) {
+        g.set(nk, ng);
+        parent.set(nk, { prev: key, move: mv });
+        open.push({ pos: np, g: ng, f: ng + h(np) });
+      }
+    }
+  }
+  return null;
+}
+```
+
+- Pros: keeps the optimality guarantee, removes the practical 8-plate ceiling, lower memory
+  in typical cases.
+- Cons: needs a small binary-heap implementation (~30 lines, no deps); slightly more code
+  than the BFS.
+
+**Recommendation:** Option B (A\*) if/when we want the guarantee to be unconditional. Keep a
+`maxNodes`/expansion cap as a backstop regardless. Existing solver tests (shortest-length
+assertions, null-on-unsolvable, replay-in-bounds) should all still pass unchanged, since
+A\* returns the same optimal lengths.
