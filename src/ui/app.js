@@ -1,6 +1,7 @@
 import { createBoard } from './board.js';
 import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
 import { solve } from '../solver.js';
+import { findCycles } from '../cycles.js';
 import { createMapping, recommendNext, allMapped } from '../discovery.js';
 import { loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings } from '../storage.js';
 
@@ -454,19 +455,65 @@ function computeSolvePositions() {
   return p;
 }
 
+// One move row, flat inside .ap-steplist so the scroll math and existing
+// selectors keep working. `extra` adds cycle classes; `badge` appends the ×N tag.
+function stepRowHtml(i, extra = '', badge = '') {
+  const mv = state.plan[i];
+  const cls = [i < state.planIndex ? 'past' : i === state.planIndex ? 'cur' : '', extra]
+    .filter(Boolean)
+    .join(' ');
+  const check = i < state.planIndex ? ' ✓' : '';
+  return `<div class="${cls}" data-action="goto-step" data-i="${i}">${i + 1} · ${plateLabel(
+    mv.plate
+  )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}${badge}</div>`;
+}
+
+// Expanded: list every move; a cycle run gets a left bracket + a ×N badge on its
+// first row.
+function expandedSegHtml(seg) {
+  if (seg.type === 'single') return stepRowHtml(seg.index);
+  const end = seg.start + seg.length - 1;
+  let out = '';
+  for (let i = seg.start; i <= end; i++) {
+    const ends = (i === seg.start ? ' cyc-first' : '') + (i === end ? ' cyc-last' : '');
+    const badge = i === seg.start ? `<span class="cyc-badge">×${seg.reps}</span>` : '';
+    out += stepRowHtml(i, `cyc${ends}`, badge);
+  }
+  return out;
+}
+
+// Collapsed: a cycle run becomes one summary row showing the unit and ×N. The run
+// containing planIndex shows live "rep r/reps · move m/unitLen" progress.
+function collapsedSegHtml(seg) {
+  if (seg.type === 'single') return stepRowHtml(seg.index);
+  const end = seg.start + seg.length;
+  const active = state.planIndex >= seg.start && state.planIndex < end;
+  const cls = active ? 'cur' : state.planIndex >= end ? 'past' : '';
+  const unit = seg.unit
+    .map((mv) => `${plateLabel(mv.plate)}<span class="step-arrow">${dirArrow(mv.dir)}</span>`)
+    .join(' · ');
+  let prog = '';
+  if (active) {
+    const off = state.planIndex - seg.start;
+    const rep = Math.floor(off / seg.unitLen) + 1;
+    const move = (off % seg.unitLen) + 1;
+    prog = `<div class="cyc-prog">rep ${rep}/${seg.reps} · move ${move}/${seg.unitLen}</div>`;
+  }
+  return `<div class="cyc-col ${cls}" data-action="goto-step" data-i="${seg.start}">
+    <span class="cyc-icon">↻</span> Repeat ${unit} <span class="cyc-badge">×${seg.reps}</span>${prog}</div>`;
+}
+
 function planCardEl() {
-  const steps = state.plan
-    .map((mv, i) => {
-      const cls = i < state.planIndex ? 'past' : i === state.planIndex ? 'cur' : '';
-      const check = i < state.planIndex ? ' ✓' : '';
-      return `<div class="${cls}" data-action="goto-step" data-i="${i}">${i + 1} · ${plateLabel(
-        mv.plate
-      )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}</div>`;
-    })
-    .join('');
+  const segs = findCycles(state.plan);
+  const collapse = !!settings.collapseCycles;
+  const steps = segs.map(collapse ? collapsedSegHtml : expandedSegHtml).join('');
   const card = document.createElement('div');
   card.className = 'ap-card';
-  card.innerHTML = `<div class="ap-h">Plan · click a step to jump there</div><div class="ap-steplist">${steps}</div>`;
+  card.innerHTML = `<div class="ap-h ap-plan-h"><span>Plan · click a step to jump there</span>
+    <label class="ap-collapse"><input type="checkbox" data-action="toggle-collapse"${
+      collapse ? ' checked' : ''
+    }> Collapse repeats</label></div>
+    <div class="ap-steplist">${steps}</div>`;
   return card;
 }
 
@@ -693,6 +740,10 @@ appEl.addEventListener('click', (e) => {
     }
     case 'toggle-kbd':
       settings.keyboardShortcuts = !kbdEnabled();
+      saveSettings(store, settings);
+      break;
+    case 'toggle-collapse':
+      settings.collapseCycles = !settings.collapseCycles;
       saveSettings(store, settings);
       break;
     case 'del-lock': {

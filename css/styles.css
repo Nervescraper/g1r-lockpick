@@ -203,6 +203,16 @@ body {
 .ap-steplist .past { color: #5f6b60; }
 .ap-steplist .step-arrow { color: var(--gold); font-weight: 700; }
 .ap-steplist .past .step-arrow { color: #4f7a56; }
+/* cycle indicators in the plan list */
+.ap-steplist .cyc { border-left: 2px solid var(--gold); padding-left: 7px; margin-left: 2px; }
+.ap-steplist .cyc-first { margin-top: 2px; border-top-left-radius: 4px; }
+.ap-steplist .cyc-last { margin-bottom: 2px; border-bottom-left-radius: 4px; }
+.cyc-badge { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--gold); }
+.ap-steplist .cyc-col .cyc-icon { color: var(--gold); font-weight: 700; }
+.ap-steplist .cyc-col .cyc-prog { font-size: 11px; color: #9a9; margin-top: 2px; }
+.ap-plan-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ap-collapse { font-size: 11px; color: #6b665c; text-transform: none; letter-spacing: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.ap-collapse input { accent-color: var(--gold); cursor: pointer; }
 .cpl-card { display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-bottom: 1px solid #232220; font-size: 12px; }
 .cpl-card:last-child { border-bottom: 0; }
 .cpl-card .mv { width: 86px; color: #cdc; }
