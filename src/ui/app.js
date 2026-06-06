@@ -1,4 +1,5 @@
 import { createBoard } from './board.js';
+import { nextActivePlate } from './active-plate.js';
 import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
 import { solve } from '../solver.js';
 import { findCycles } from '../cycles.js';
