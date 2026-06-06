@@ -14,6 +14,28 @@ const N_MIN = 3;
 const N_MAX = 8;
 const DIR_WORD = { L: 'Left', R: 'Right' };
 
+// User-facing changelog, newest first. Shown in the in-app changelog modal.
+const CHANGELOG = [
+  {
+    date: '2026-06-06',
+    items: [
+      'Record chest contents — keep a loot list alongside each saved lock.',
+      'Import and export saved locks, to back them up or move them between devices.',
+    ],
+  },
+  {
+    date: '2026-06-05',
+    items: [
+      'First release: map a lock plate by plate, then get a safe, edge-free solution that costs zero durability.',
+      'Step-by-step solve walkthrough, with keyboard shortcuts to move through the plan.',
+      'Repeating cycles in the plan are bracketed with a countdown and can be collapsed.',
+      'Set pin positions by dragging the slides or with the number keys.',
+      'Save locks in your browser and name them by location and type.',
+      'Layout tuned for phones.',
+    ],
+  },
+];
+
 const appEl = document.getElementById('app');
 
 let state = restore();
@@ -165,6 +187,47 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// ---------- changelog modal ----------
+// A self-contained overlay on document.body, independent of the app's render cycle
+// and state. Dismissable by Esc, a backdrop click, or the close button — every path
+// routes through closeChangelog so the keydown listener is always cleaned up.
+function changelogHtml() {
+  const entries = CHANGELOG.map((e) =>
+    `<section class="cl-entry"><h3>${escapeHtml(e.date)}</h3><ul>${
+      e.items.map((it) => `<li>${escapeHtml(it)}</li>`).join('')
+    }</ul></section>`).join('');
+  return `<div class="cl-modal" role="dialog" aria-modal="true" aria-labelledby="cl-title">
+    <button class="cl-close" data-cl="close" aria-label="Close changelog">✕</button>
+    <h2 id="cl-title">Changelog</h2>${entries}</div>`;
+}
+
+function onChangelogKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); closeChangelog(); }
+}
+
+function closeChangelog() {
+  const ov = document.getElementById('cl-overlay');
+  if (ov) ov.remove();
+  document.removeEventListener('keydown', onChangelogKey, true);
+}
+
+function openChangelog() {
+  if (document.getElementById('cl-overlay')) return; // already open
+  const ov = document.createElement('div');
+  ov.id = 'cl-overlay';
+  ov.className = 'cl-overlay';
+  ov.innerHTML = changelogHtml();
+  ov.addEventListener('click', (e) => {
+    // Backdrop (the overlay itself) or the close button dismiss; clicks inside don't.
+    if (e.target === ov || e.target.closest('[data-cl="close"]')) closeChangelog();
+  });
+  document.body.appendChild(ov);
+  // Capture phase so Esc closes the modal before the app's global key handlers see it.
+  document.addEventListener('keydown', onChangelogKey, true);
+  const close = ov.querySelector('.cl-close');
+  if (close) close.focus();
+}
+
 // ---------- render ----------
 
 function render() {
@@ -180,6 +243,11 @@ function render() {
   over.dataset.action = 'start-over';
   over.textContent = '⟳ Start over';
   bar.appendChild(over);
+  const clog = document.createElement('button');
+  clog.className = 'ap-changelog';
+  clog.dataset.action = 'open-changelog';
+  clog.textContent = 'Changelog';
+  bar.appendChild(clog);
   wrap.appendChild(bar);
 
   if ((state.location || '').trim() || (state.description || '').trim()) {
@@ -1146,6 +1214,7 @@ appEl.addEventListener('click', (e) => {
     case 'import-cancel':
     case 'import-done': state.stage = 'lock'; state.import = undefined; break;
     case 'cf-choice': state.import.choices[+t.dataset.i] = t.dataset.choice; break;
+    case 'open-changelog': openChangelog(); return; // overlay lives outside the app state/render cycle
     default: return;
   }
   render();
@@ -1184,6 +1253,7 @@ appEl.addEventListener('input', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if (document.getElementById('cl-overlay')) return; // changelog modal owns the keyboard while open
   if (e.metaKey || e.ctrlKey || e.altKey) return; // leave Cmd/Ctrl+R etc. for the browser
   if (!kbdEnabled() || isNarrowViewport()) return;
   const tag = (e.target.tagName || '').toUpperCase();

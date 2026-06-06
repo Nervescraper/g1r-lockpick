@@ -42,6 +42,21 @@ body {
 .ap-bar .ap-rail { margin: 0; }
 .ap-reset { position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 4px 11px; border-radius: 6px; border: 1px solid #3a3833; background: #221f1b; color: #b9b3a6; cursor: pointer; }
 .ap-reset:hover { color: #eee; border-color: #555; }
+/* Mirror of .ap-reset, pinned to the left edge of the bar at the same height. */
+.ap-changelog { position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 4px 11px; border-radius: 6px; border: 1px solid #3a3833; background: #221f1b; color: #b9b3a6; cursor: pointer; }
+.ap-changelog:hover { color: #eee; border-color: #555; }
+
+/* ---- changelog modal ---- */
+.cl-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px 16px; background: rgba(8, 7, 5, 0.66); overflow-y: auto; }
+.cl-modal { position: relative; width: 100%; max-width: 540px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px 24px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); }
+.cl-modal h2 { margin: 0 0 14px; font-size: 16px; letter-spacing: 2px; text-transform: uppercase; color: #f0e2c6; }
+.cl-close { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; border: 1px solid #3a3833; border-radius: 6px; background: #221f1b; color: #b9b3a6; cursor: pointer; font-size: 13px; line-height: 1; }
+.cl-close:hover { color: #eee; border-color: #555; }
+.cl-entry { margin-top: 16px; }
+.cl-entry:first-of-type { margin-top: 0; }
+.cl-entry h3 { margin: 0 0 6px; font-size: 12px; color: var(--gold); letter-spacing: 1px; }
+.cl-entry ul { margin: 0; padding-left: 18px; }
+.cl-entry li { margin: 4px 0; color: #cfc9bd; }
 .lock-name-input { width: 100%; max-width: 300px; padding: 7px 10px; background: #141310; border: 1px solid #3a3833; border-radius: 6px; color: #e8e2d6; font-size: 13px; }
 .lock-name-input::placeholder { color: #6b665c; }
 .fill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
@@ -315,5 +330,5 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
      stage pill. Stack it under the (wrappable) rail instead. */
   .ap-bar { flex-direction: column; align-items: center; gap: 9px; }
   .ap-rail { flex-wrap: wrap; }
-  .ap-reset { position: static; transform: none; }
+  .ap-reset, .ap-changelog { position: static; transform: none; }
 }
