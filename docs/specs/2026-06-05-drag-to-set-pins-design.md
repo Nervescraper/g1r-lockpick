@@ -30,7 +30,9 @@ are edited through a numeric clicker in the side panel (`positionScale` / `posit
    integer column live as the pointer crosses it (always lands on a valid 1–7 position).
 2. Drag is direct-manipulation: dragging the slide right moves it right (position number
    decreases); dragging left moves it left (position increases). Clamped to 1–7.
-3. Drag is enabled **only** in Setup. No behavioural change to Discovery or Solve.
+3. Drag is enabled **only while editing positions** — the Setup stage and the Solve
+   stage's "Edit positions" mode. Discovery and the normal Solve (plan-stepping) board stay
+   non-draggable.
 4. The numeric 1–7 scale clicker is removed from the Setup side panel.
 5. Keyboard (gated by the existing `kbdEnabled()` toggle, on by default), Setup stage only:
    - `1`–`7`: set the active plate's position, then advance the cursor P1 → P2 → … → Pₙ.
@@ -131,6 +133,8 @@ export function nextActivePlate(active, n) { return Math.min(active + 1, n - 1);
 
 ## Out of scope
 
-- Drag/keyboard editing of positions in Discovery or Solve.
+- Drag/keyboard position editing in Discovery, or in the normal (plan-stepping) Solve board.
+  (Solve's "Edit positions" mode *is* in scope — it shares the Setup drag + keyboard UI,
+  since the rule is "draggable only while editing positions".)
 - Touch-specific gestures beyond what Pointer Events already unify (mouse + touch).
 - Reordering plates or changing plate count by drag.
