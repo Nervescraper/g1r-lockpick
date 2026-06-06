@@ -286,3 +286,43 @@ test('constructed case: optimizer reaches minimum switches, beating a naive inte
     `expected strict improvement; plan=${countSwitches(plan)} interleaved=${countSwitches(interleaved)}`,
   );
 });
+
+test('n=3 and n=4 sampled: solver hits true-minimum switches (independent DP oracle)', () => {
+  const rnd = mulberry32(0xD00D);
+  let checked = 0;
+  for (let i = 0; i < 400; i++) {
+    const n = 3 + (i % 2); // 3 or 4
+    const coupling = randomCoupling(n, rnd);
+    const start = randomStart(n, rnd);
+    const plan = solve(start, coupling);
+    const opt = optimalPlan(start, coupling);
+    assert.equal(plan === null, opt === null, `solvability mismatch for ${start} / ${JSON.stringify(coupling)}`);
+    if (plan === null) continue;
+    checked++;
+    assert.equal(plan.length, opt.len, `length not optimal for ${start} / ${JSON.stringify(coupling)}`);
+    assert.equal(
+      countSwitches(plan),
+      opt.switches,
+      `switches not optimal for ${start} / ${JSON.stringify(coupling)}: got ${countSwitches(plan)}, true min ${opt.switches}`,
+    );
+  }
+  assert.ok(checked > 50, `expected many solvable cases, got ${checked}`);
+});
+
+test('integer precheck rejects an unsolvable invertible lock', () => {
+  // C = [[2,0],[0,1]] is invertible; from [1,4] toward [4,4] the net move on plate 0
+  // is 3/2 (non-integer), so the lock is unsolvable and the precheck returns null.
+  assert.equal(solve([1, 4], [[2, 0], [0, 1]]), null);
+});
+
+test('A* makes a deep uncoupled 7-plate lock solvable within the node cap', () => {
+  // Identity coupling, all pins at 1: hand-solvable (each plate +3 -> 21 moves). Without
+  // the heuristic this is the pathological deep case (~3.3M states, ~25s at the 8M cap);
+  // A*'s exact heuristic here makes it return the same optimal plan near-instantly.
+  const id7 = Array.from({ length: 7 }, (_, i) => Array.from({ length: 7 }, (_, j) => (i === j ? 1 : 0)));
+  const start = [1, 1, 1, 1, 1, 1, 1];
+  const plan = solve(start, id7);
+  assert.ok(plan !== null, 'expected a plan; heuristic-less search would hit the cap and return null');
+  assert.equal(plan.length, 21);
+  assert.ok(isSolved(replay(start, id7, plan)));
+});

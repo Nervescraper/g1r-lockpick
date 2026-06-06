@@ -107,3 +107,21 @@ function solve(positions, coupling) {
 `maxNodes`/expansion cap as a backstop regardless. Existing solver tests (shortest-length
 assertions, null-on-unsolvable, replay-in-bounds) should all still pass unchanged, since
 A\* returns the same optimal lengths.
+
+## Update (2026-06-06): A\* + integer precheck implemented
+
+The recommendation above is now implemented (`docs/specs/2026-06-06-solver-performance-astar-design.md`),
+with a **stronger heuristic** than the `max|pos−4|` originally sketched here. Using the
+linearity of the lock (`xᵀC = goal − start`), the solver computes the exact net-move vector
+`x = C⁻ᵀ(goal − pos)` via integer adjugate/determinant (`src/linalg.js`) and uses
+`h(pos) = ‖x‖₁` — admissible, consistent, and *exact* for uncoupled/deep locks, which were
+the slow cases. It also adds an **integer-feasibility precheck**: when `C` is invertible, a
+non-integer `x(start)` proves the lock unsolvable, so incomplete/contradictory mappings
+return `null` instantly instead of exhausting the space. Singular `C` falls back to `h≡0`
+(plain Dijkstra). Measured: unsolvable 8-plate ~63 s → instant (precheck); a realistic
+coupled 8-plate lock ~5 ms; normal coupled locks drop below the original BFS's memory. The
+deep *uncoupled* 7-plate pathology improves from ~25 s to ~0.7 s (≈140k states) — not
+instant, because the exact heuristic flattens the many equal-length interleavings to the
+same `f`, so A\* still traverses that plateau (over the `(pos, lastPlate)` dimension) to find
+the min-switch ordering; it stays far under the cap. The `maxNodes`/`Map` ceiling notes
+above still apply as a backstop for rare hard feasible locks.
