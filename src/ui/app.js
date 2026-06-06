@@ -42,9 +42,20 @@ function freshSetup(n) {
 }
 
 function persist() {
-  const { stage, n, positions, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart } = state;
+  const { stage, n, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart } = state;
+  // While editing positions in Solve, changes stay pending until Apply — persist the
+  // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
+  const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
   saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart });
   syncLock();
+}
+
+// Leave the Solve "Edit positions" mode without committing — restore the pre-edit
+// positions. Apply is the only path that keeps the edited values.
+function discardPendingEdit() {
+  if (state.editing && state.editBackup) state.positions = state.editBackup.slice();
+  state.editing = false;
+  state.editBackup = undefined;
 }
 
 function composeName() {
@@ -635,7 +646,10 @@ function solvePanel(side, boardProps) {
     card.className = 'ap-card';
     card.innerHTML = `<div class="ap-h">Set the plates' current positions</div>
       <div class="muted" style="margin:4px 0 2px">Drag each slide left/right, or press <b>1</b>–<b>7</b> to set the active plate (advances P1 → P${state.n}).</div>
-      <div style="margin-top:12px"><span class="ap-btn primary" data-action="apply-edit">Apply ›</span></div>`;
+      <div style="margin-top:12px">
+        <span class="ap-btn primary" data-action="apply-edit">Apply ›</span>
+        <span class="ap-btn" data-action="cancel-edit">Cancel</span>
+      </div>`;
     side.appendChild(card);
     return { ...boardProps, draggable: true, highlightPlate: state.activePlate, onSetPosition: onDragPosition };
   }
@@ -745,7 +759,7 @@ appEl.addEventListener('click', (e) => {
       state.stage = 'discovery';
       suggestDefault();
       break;
-    case 'goto-solve': state.stage = 'solve'; state.editing = false; state.plan = undefined; break;
+    case 'goto-solve': discardPendingEdit(); state.stage = 'solve'; state.plan = undefined; break;
     case 'new-setup': {
       const dup = findDuplicate();
       if (dup) { state.nameConflict = dup.name; break; } // stay on Lock step; warning shows
@@ -755,10 +769,11 @@ appEl.addEventListener('click', (e) => {
     }
     case 'goto-stage': {
       const target = t.dataset.stage;
+      discardPendingEdit();
       if (target === 'lock') state.stage = 'lock';
-      else if (target === 'setup') { state.stage = 'setup'; state.editing = false; state.activePlate = 0; }
+      else if (target === 'setup') { state.stage = 'setup'; state.activePlate = 0; }
       else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; suggestDefault(); }
-      else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.editing = false; state.plan = undefined; }
+      else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.plan = undefined; }
       break;
     }
     case 'new-lock': state = freshSetup(state.n); break;
@@ -803,12 +818,18 @@ appEl.addEventListener('click', (e) => {
       state.positions = computeSolvePositions();
       break;
     }
-    case 'edit-positions': state.editing = true; state.activePlate = 0; break;
+    case 'edit-positions':
+      state.editing = true;
+      state.editBackup = state.positions.slice(); // snapshot to restore on Cancel
+      state.activePlate = 0;
+      break;
     case 'apply-edit':
       state.editing = false;
+      state.editBackup = undefined;
       state.initial = state.positions.slice(); // corrected positions become the new reset point
       state.plan = undefined;
       break;
+    case 'cancel-edit': discardPendingEdit(); break;
     case 'back-to-map': state.stage = 'discovery'; break;
     case 'save-lock': {
       if (!(state.location || '').trim() && !(state.description || '').trim()) {
@@ -842,6 +863,7 @@ appEl.addEventListener('click', (e) => {
         // jump straight to whatever step is next: Solve if fully mapped, else resume mapping
         state.stage = state.lockLoaded ? 'solve' : 'discovery';
         state.editing = false;
+        state.editBackup = undefined;
         state.plan = undefined;
         state.activePlate = undefined;
         state.rel = {};
