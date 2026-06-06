@@ -1,11 +1,12 @@
 import { MIN, MAX, applyMove, isLegal } from './model.js';
 
 export function createMapping(n) {
-  return {
-    n,
-    coupling: Array.from({ length: n }, () => Array(n).fill(0)),
-    status: Array(n).fill('unstarted'),
-  };
+  const coupling = Array.from({ length: n }, (_, i) => {
+    const row = Array(n).fill(0);
+    row[i] = 1; // every plate moves itself by default, even before it's mapped
+    return row;
+  });
+  return { n, coupling, status: Array(n).fill('unstarted') };
 }
 
 // Convert an observed screen shift ('L' = +1) into the Left-press effect value,

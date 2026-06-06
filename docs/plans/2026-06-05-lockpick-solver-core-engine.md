@@ -407,10 +407,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMapping, leftEffect, recordShifts } from '../src/discovery.js';
 
-test('createMapping makes an n-plate zeroed matrix marked unstarted', () => {
+test('createMapping gives each plate a default self-move and marks all unstarted', () => {
   const m = createMapping(3);
   assert.equal(m.n, 3);
-  assert.deepEqual(m.coupling, [[0, 0, 0], [0, 0, 0], [0, 0, 0]]);
+  assert.deepEqual(m.coupling, [[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
   assert.deepEqual(m.status, ['unstarted', 'unstarted', 'unstarted']);
 });
 
@@ -441,11 +441,12 @@ Expected: FAIL — `../src/discovery.js` not found.
 import { MIN, MAX, applyMove, isLegal } from './model.js';
 
 export function createMapping(n) {
-  return {
-    n,
-    coupling: Array.from({ length: n }, () => Array(n).fill(0)),
-    status: Array(n).fill('unstarted'),
-  };
+  const coupling = Array.from({ length: n }, (_, i) => {
+    const row = Array(n).fill(0);
+    row[i] = 1; // every plate moves itself by default, even before it's mapped
+    return row;
+  });
+  return { n, coupling, status: Array(n).fill('unstarted') };
 }
 
 // Convert an observed screen shift ('L' = +1) into the Left-press effect value,
@@ -582,9 +583,8 @@ test('after deferring a plate, a different plate is recommended next', () => {
   assert.notEqual(rec.plate, 0);
 });
 
-test('falls back to a least-risky probe when an edge plate blocks safety', () => {
-  const m = createMapping(2);
-  m.status = ['unstarted', 'done']; // no known move available to prep with plate 1? see next test
+test('falls back to a least-risky probe when nothing is safe and no prep helps', () => {
+  const m = createMapping(2); // neither plate mapped -> no prep move available
   const rec = recommendNext([1, 7], m); // both at edges, nothing safe
   assert.equal(rec.type, 'probe');
   assert.equal(rec.safe, false);

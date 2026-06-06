@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { solve } from '../src/solver.js';
 import {
   createMapping,
   leftEffect,
@@ -11,11 +12,17 @@ import {
   allMapped,
 } from '../src/discovery.js';
 
-test('createMapping makes an n-plate zeroed matrix marked unstarted', () => {
+test('createMapping gives each plate a default self-move and marks all unstarted', () => {
   const m = createMapping(3);
   assert.equal(m.n, 3);
-  assert.deepEqual(m.coupling, [[0, 0, 0], [0, 0, 0], [0, 0, 0]]);
+  assert.deepEqual(m.coupling, [[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
   assert.deepEqual(m.status, ['unstarted', 'unstarted', 'unstarted']);
+});
+
+test('an unmapped lock is still solvable using self-moves only', () => {
+  const m = createMapping(2);
+  const moves = solve([2, 5], m.coupling); // no connections recorded yet
+  assert.notEqual(moves, null);
 });
 
 test('leftEffect converts an observed shift into a Left-frame value', () => {
@@ -78,10 +85,9 @@ test('recommendNext returns null when every plate is mapped', () => {
   assert.equal(recommendNext([4, 4], m), null);
 });
 
-test('falls back to a least-risky probe when an edge plate blocks safety', () => {
-  const m = createMapping(2);
-  m.status = ['unstarted', 'done'];
-  const rec = recommendNext([1, 7], m); // both at edges, nothing safe, no prep helps
+test('falls back to a least-risky probe when nothing is safe and no prep helps', () => {
+  const m = createMapping(2); // neither plate mapped -> no prep move available
+  const rec = recommendNext([1, 7], m); // both plates at edges, nothing safe
   assert.equal(rec.type, 'probe');
   assert.equal(rec.safe, false);
 });
