@@ -190,8 +190,15 @@ function render() {
     side.className = 'ap-side';
 
     let boardProps = { positions: state.positions };
-    if (state.stage === 'setup') side.appendChild(setupPanel());
-    else if (state.stage === 'solve') boardProps = solvePanel(side, boardProps);
+    if (state.stage === 'setup') {
+      side.appendChild(setupPanel());
+      boardProps = {
+        positions: state.positions,
+        draggable: true,
+        highlightPlate: state.activePlate,
+        onSetPosition: (i, pos) => { state.positions[i] = pos; state.activePlate = i; render(); },
+      };
+    } else if (state.stage === 'solve') boardProps = solvePanel(side, boardProps);
 
     main.appendChild(boardCol);
     main.appendChild(side);
@@ -343,6 +350,8 @@ function railEl() {
 
 // ---------- Setup ----------
 
+// Numeric 1–7 pin clicker — used by the Solve stage's "Edit positions" mode (Setup uses
+// drag + keyboard instead).
 function positionScale(plate, value) {
   let cells = '';
   for (let v = 1; v <= 7; v++) {
@@ -439,7 +448,7 @@ function setupPanel() {
       <span class="muted">(${N_MIN}–${N_MAX})</span>
     </div>
     <div class="ap-h">Current pin position of each plate <span class="muted" style="text-transform:none;letter-spacing:0">— saved as the lock's reset point</span></div>
-    ${positionRows()}
+    <div class="muted" style="margin:4px 0 2px">Drag each slide left/right, or press <b>1</b>–<b>7</b> to set the active plate (advances P1 → P${state.n}).</div>
     <div style="margin-top:12px">${primary}</div>
   `;
   return card;
@@ -730,12 +739,13 @@ appEl.addEventListener('click', (e) => {
       const dup = findDuplicate();
       if (dup) { state.nameConflict = dup.name; break; } // stay on Lock step; warning shows
       state.stage = 'setup';
+      state.activePlate = 0;
       break;
     }
     case 'goto-stage': {
       const target = t.dataset.stage;
       if (target === 'lock') state.stage = 'lock';
-      else if (target === 'setup') { state.stage = 'setup'; state.editing = false; }
+      else if (target === 'setup') { state.stage = 'setup'; state.editing = false; state.activePlate = 0; }
       else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; suggestDefault(); }
       else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.editing = false; state.plan = undefined; }
       break;
