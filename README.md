@@ -1,25 +1,7 @@
 # Gothic 1 Remake Lockpick Solver
 
-Web tool to map and solve the Gothic 1 Remake lockpicking puzzle.
+Web tool to map and solve the Gothic 1 Remake lockpicking puzzles.
 See `docs/specs/2026-06-05-g1r-lockpick-solver-design.md`.
-
-## Run the app
-
-    python3 scripts/serve.py        # http://localhost:8000
-
-This dev server disables caching, so a normal reload always loads your latest JS/CSS
-(plain `python3 -m http.server` can serve stale cached modules).
-
-While solving, keyboard shortcuts step through the plan — **Enter / Space / ↓ / →** to
-advance and **↑ / ← / Backspace** to go back (**R** resets the pins). A checkbox at the
-bottom of the page turns the shortcuts off for anyone who prefers not to use them; hover
-the "Keyboard shortcuts" label to see the full list.
-
-## Run the tests
-
-    node --test
-
-(Requires Node 18+; no dependencies to install.)
 
 ## License
 
