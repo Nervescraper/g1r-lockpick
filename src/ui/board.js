@@ -7,10 +7,19 @@
 export const FIELD_COLS = 13;
 export const KEYWAY_COL = 7; // 1-based centre column of the field (the goal)
 
-// Column geometry for a plate at position p (1..7) on the 13-wide field. The slide is 7
-// holes wide and its pin is the middle hole, so pinCol(4) === KEYWAY_COL (position 4 = home).
+// Column geometry for a plate at position p (1..7) on the 13-wide field. The pin is the
+// fixed keyway (column 7); position p is which of the slide's 7 holes sits over it. So the
+// slide shifts as a unit: p=1 puts the leftmost hole on the keyway (slide hard right), p=7
+// the rightmost hole (slide hard left), p=4 the middle hole (home). This matches the model's
+// direction sense, where a higher position means the slide has moved left.
 export function slideCols(p) {
-  return { startCol: p, pinCol: p + 3 };
+  return { startCol: KEYWAY_COL + 1 - p, pinCol: KEYWAY_COL };
+}
+
+// Snap a drag to a 1..7 position. Dragging right (positive column delta) moves the slide
+// right, which lowers the position number (startCol = 8 - p), so we subtract the delta.
+export function dragToPosition(startPos, dxCols) {
+  return Math.max(1, Math.min(7, startPos - dxCols));
 }
 
 export function createBoard(host, s) {

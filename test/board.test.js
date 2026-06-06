@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { slideCols, KEYWAY_COL, FIELD_COLS } from '../src/ui/board.js';
+import { slideCols, dragToPosition, KEYWAY_COL, FIELD_COLS } from '../src/ui/board.js';
 
-test('slideCols: position 4 puts the pin in the keyway', () => {
-  assert.equal(slideCols(4).pinCol, KEYWAY_COL);
+test('slideCols: the pin is always the fixed keyway column', () => {
+  for (let p = 1; p <= 7; p++) {
+    assert.equal(slideCols(p).pinCol, KEYWAY_COL, `pin sits in the keyway for p=${p}`);
+  }
 });
 
-test('slideCols: a slide is 7 holes wide and the pin is the middle hole', () => {
+test('slideCols: a slide is 7 holes wide and stays within the field', () => {
   for (let p = 1; p <= 7; p++) {
-    const { startCol, pinCol } = slideCols(p);
-    assert.equal(pinCol, startCol + 3, `pin is middle hole for p=${p}`);
+    const { startCol } = slideCols(p);
     assert.ok(startCol >= 1 && startCol + 6 <= FIELD_COLS, `slide stays in field for p=${p}`);
   }
 });
@@ -21,7 +22,27 @@ test('slideCols: every slide covers the keyway column', () => {
   }
 });
 
-test('slideCols: boundary positions span the full 13-col field', () => {
-  assert.deepEqual(slideCols(1), { startCol: 1, pinCol: 4 });
-  assert.deepEqual(slideCols(7), { startCol: 7, pinCol: 10 });
+test('slideCols: position 1 sits hard right, position 7 hard left, 4 is home', () => {
+  assert.deepEqual(slideCols(1), { startCol: 7, pinCol: 7 }); // leftmost hole over keyway → slide hard right
+  assert.deepEqual(slideCols(4), { startCol: 4, pinCol: 7 }); // middle hole over keyway → home
+  assert.deepEqual(slideCols(7), { startCol: 1, pinCol: 7 }); // rightmost hole over keyway → slide hard left
+});
+
+test('dragToPosition: no drag keeps the start position', () => {
+  assert.equal(dragToPosition(4, 0), 4);
+});
+
+test('dragToPosition: dragging right (positive cols) lowers the position', () => {
+  assert.equal(dragToPosition(4, 1), 3);
+  assert.equal(dragToPosition(4, 3), 1);
+});
+
+test('dragToPosition: dragging left (negative cols) raises the position', () => {
+  assert.equal(dragToPosition(4, -1), 5);
+  assert.equal(dragToPosition(4, -3), 7);
+});
+
+test('dragToPosition: clamps to the 1..7 range', () => {
+  assert.equal(dragToPosition(1, 5), 1);
+  assert.equal(dragToPosition(7, -5), 7);
 });
