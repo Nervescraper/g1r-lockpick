@@ -211,6 +211,8 @@ function mappingView() {
   const col = document.createElement('div');
   col.className = 'map-wrap';
 
+  const isActive = active != null;
+  const done = allMapped(m);
   const head = document.createElement('div');
   head.className = 'ap-card';
   const suggestHtml =
@@ -220,12 +222,14 @@ function mappingView() {
         )}</b> ${suggestion.safe ? '✓ safe to press' : '⚠ may jam at an edge'}
         <span class="ap-btn" data-action="select-plate" data-plate="${suggestion.plate}" style="margin-left:6px">Select ›</span></div>`
       : '';
-  head.innerHTML = `
-    <div class="ap-h">Map the lock · ${mapped} of ${m.n} mapped</div>
-    <div class="muted">Click a plate to select it, then mark how each <i>other</i> plate moves when you press it:
-      <span style="color:var(--goal)">Moves with</span> = same direction, <span style="color:var(--danger)">Moves opposite</span> = the other way.</div>
-    ${active != null ? `<div style="margin-top:6px;font-size:14px;color:#fff">Recording <b style="color:var(--gold)">${plateLabel(active)}</b></div>` : ''}
-    ${suggestHtml}`;
+  const headBody = isActive
+    ? `<div class="muted">For <b style="color:var(--gold)">${plateLabel(active)}</b>: press it in game, then mark how each
+        <i>other</i> plate moves — <span style="color:var(--goal)">Moves with</span> = same direction,
+        <span style="color:var(--danger)">Moves opposite</span> = the other way.</div>
+       <div style="margin-top:6px;font-size:14px;color:#fff">Recording <b style="color:var(--gold)">${plateLabel(active)}</b></div>`
+    : `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`;
+  const title = done ? `Map the lock · all ${m.n} mapped ✓` : `Map the lock · ${mapped} of ${m.n} mapped`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${headBody}${suggestHtml}`;
   col.appendChild(head);
 
   const boardHost = document.createElement('div');
@@ -243,12 +247,16 @@ function mappingView() {
 
   const foot = document.createElement('div');
   foot.className = 'ap-card';
-  foot.innerHTML = `
-    ${active != null ? '<span class="ap-btn primary" data-action="save-next">Save plate ›</span>' : '<div class="muted">Pick a plate above to start.</div>'}
-    <div class="muted" style="margin-top:8px">Saved plates turn <span style="color:var(--goal)">green</span>.</div>
-    <div class="note" style="margin-top:10px">If pressing a plate jams at an edge, you won't see its real connections — press the
-      other direction, or move that plate toward center first, then map it.</div>
-    ${allMapped(m) ? '<div style="margin-top:12px"><span class="ap-btn primary" data-action="goto-solve">All mapped — Solve ›</span></div>' : ''}`;
+  const saveBlock = isActive
+    ? `<span class="ap-btn primary" data-action="save-next">Save plate ›</span>
+       <div class="muted" style="margin-top:8px">Saved plates turn <span style="color:var(--goal)">green</span>.</div>
+       <div class="note" style="margin-top:10px">If pressing a plate jams at an edge, you won't see its real connections — press the
+         other direction, or move that plate toward center first, then map it.</div>`
+    : '';
+  const solveBlock = done
+    ? `<div style="${isActive ? 'margin-top:12px' : ''}"><span class="ap-btn primary" data-action="goto-solve">Solve ›</span></div>`
+    : '';
+  foot.innerHTML = saveBlock + solveBlock;
   col.appendChild(foot);
 
   // labels go green once a plate is saved
