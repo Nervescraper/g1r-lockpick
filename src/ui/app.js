@@ -196,7 +196,7 @@ function render() {
         positions: state.positions,
         draggable: true,
         highlightPlate: state.activePlate,
-        onSetPosition: (i, pos) => { state.positions[i] = pos; state.activePlate = i; render(); },
+        onSetPosition: onDragPosition,
       };
     } else if (state.stage === 'solve') boardProps = solvePanel(side, boardProps);
 
@@ -350,22 +350,33 @@ function railEl() {
 
 // ---------- Setup ----------
 
-// Numeric 1–7 pin clicker — used by the Solve stage's "Edit positions" mode (Setup uses
-// drag + keyboard instead).
-function positionScale(plate, value) {
-  let cells = '';
-  for (let v = 1; v <= 7; v++) {
-    const cls = ['sc', v === value ? 'cur' : '', v === 4 ? 'goal' : ''].filter(Boolean).join(' ');
-    cells += `<span class="${cls}" data-action="pos-set" data-plate="${plate}" data-val="${v}">${v}</span>`;
-  }
-  return cells;
+// Positions are set by dragging slides on the board (or 1–7 keys) — see onDragPosition and
+// the keydown handler. Active in the Setup stage and the Solve stage's "Edit positions"
+// mode; the board is non-draggable everywhere else.
+function onDragPosition(i, pos) {
+  state.positions[i] = pos;
+  state.activePlate = i;
+  render();
 }
 
-function positionRows() {
-  return state.positions
-    .map((p, i) => `<div class="prow"><span class="pl">P${i + 1}</span><div class="scale">${positionScale(i, p)}</div></div>`)
-    .reverse()
-    .join('');
+// True while the board is in a position-editing context (Setup, or Solve's Edit mode).
+function isPositionEditing() {
+  return state.stage === 'setup' || (state.stage === 'solve' && state.editing);
+}
+
+// Keyboard pin entry shared by both editing contexts: 1–7 sets the active plate's pin and
+// advances the cursor P1→Pn; ↑/↓ move the cursor (↑ = higher plate number). Returns true
+// if the key was handled.
+function handlePositionKey(key) {
+  const i = state.activePlate ?? 0;
+  if (key >= '1' && key <= '7') {
+    state.positions[i] = +key;
+    state.activePlate = nextActivePlate(i, state.n);
+    return true;
+  }
+  if (key === 'ArrowUp') { state.activePlate = Math.min(i + 1, state.n - 1); return true; }
+  if (key === 'ArrowDown') { state.activePlate = Math.max(i - 1, 0); return true; }
+  return false;
 }
 
 // The location/type/description fields, reused on the Lock step.
@@ -622,10 +633,11 @@ function solvePanel(side, boardProps) {
   if (state.editing) {
     const card = document.createElement('div');
     card.className = 'ap-card';
-    card.innerHTML = `<div class="ap-h">Set the plates' current positions</div>${positionRows()}
+    card.innerHTML = `<div class="ap-h">Set the plates' current positions</div>
+      <div class="muted" style="margin:4px 0 2px">Drag each slide left/right, or press <b>1</b>–<b>7</b> to set the active plate (advances P1 → P${state.n}).</div>
       <div style="margin-top:12px"><span class="ap-btn primary" data-action="apply-edit">Apply ›</span></div>`;
     side.appendChild(card);
-    return boardProps;
+    return { ...boardProps, draggable: true, highlightPlate: state.activePlate, onSetPosition: onDragPosition };
   }
 
   if (state.plan === undefined) initSolve();
@@ -725,7 +737,6 @@ appEl.addEventListener('click', (e) => {
   switch (a) {
     case 'n-dec': resizeN(clampN(state.n - 1)); break;
     case 'n-inc': resizeN(clampN(state.n + 1)); break;
-    case 'pos-set': state.positions[+t.dataset.plate] = +t.dataset.val; break;
     case 'start-mapping':
       if (!state.mapping || state.mapping.n !== state.n) state.mapping = createMapping(state.n);
       state.initial = state.positions.slice(); // the setup positions are the lock's reset point
@@ -792,7 +803,7 @@ appEl.addEventListener('click', (e) => {
       state.positions = computeSolvePositions();
       break;
     }
-    case 'edit-positions': state.editing = true; break;
+    case 'edit-positions': state.editing = true; state.activePlate = 0; break;
     case 'apply-edit':
       state.editing = false;
       state.initial = state.positions.slice(); // corrected positions become the new reset point
@@ -883,6 +894,12 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     render();
     return;
+  }
+
+  // Setup / Edit-positions — digits set the active plate's pin; arrows move the cursor.
+  if (isPositionEditing()) {
+    if (handlePositionKey(e.key)) { e.preventDefault(); render(); }
+    return; // these contexts consume no plan-stepping keys
   }
 
   // Step through the plan while solving. Advance: Enter / Space / ↓ / →. Back: ↑ / ←.

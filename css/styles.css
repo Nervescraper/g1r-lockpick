@@ -133,6 +133,8 @@ body {
 }
 .tp-hole2.pin { background: radial-gradient(circle at 40% 35%, #f4d878, #b8862f); box-shadow: 0 0 7px 2px rgba(232,194,90,.6); }
 .tp-hole2.pin.ok { background: radial-gradient(circle at 40% 35%, #9ee6a6, #3e8a4a); }
+/* while a slide is being dragged, show the grabbing cursor everywhere */
+body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 /* single dashed keyway box over column 7, spanning all rows */
 .tp-keybox {
   position: absolute; top: 2px; bottom: 2px; z-index: 4; pointer-events: none;
