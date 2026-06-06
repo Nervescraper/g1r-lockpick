@@ -86,7 +86,8 @@ probes.
 
 ### 5.2 Recording
 
-- The **active plate is not listed** in the recorder: pressing a plate always moves that
+- The **active plate appears as a non-interactive placeholder** in the recorder (so the
+  list keeps its order), not as a markable option: pressing a plate always moves that
   plate's own pin by the press direction, so its self-shift is recorded automatically
   (its coupling diagonal is +1 in the Left frame). The player only marks the **other**
   plates they saw move.

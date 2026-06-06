@@ -305,7 +305,11 @@ function movedControls() {
   const active = state.activePlate;
   const rows = state.positions
     .map((_, j) => {
-      if (j === active) return ''; // the active plate moves itself — not a separate option
+      if (j === active) {
+        // placeholder so the row stays in place; the active plate moves itself
+        const w = state.probeDir === 'L' ? '◀ left' : '▶ right';
+        return `<div class="rec rec-self"><span class="pl">${plateLabel(j)}</span><span class="self-note">the plate you're moving — shifts ${w}</span></div>`;
+      }
       const mark = state.record[j];
       const noMark = mark ? '' : '<span class="nomark">no shift seen</span>';
       return `<div class="rec"><span class="pl">${plateLabel(j)}</span><div class="seg">
@@ -316,7 +320,7 @@ function movedControls() {
     .reverse() // P1 at the bottom, matching the board
     .join('');
   return `
-    <div class="muted" style="margin:6px 0">Mark each <i>other</i> plate you saw shift (${plateLabel(active)} moves itself):</div>
+    <div class="muted" style="margin:6px 0">Mark each other plate you saw shift:</div>
     ${rows}
     <div style="margin-top:12px"><span class="ap-btn primary" data-action="save-next">Save ›</span></div>`;
 }
