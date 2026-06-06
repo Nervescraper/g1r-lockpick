@@ -245,14 +245,15 @@ function mappingView() {
   foot.className = 'ap-card';
   foot.innerHTML = `
     ${active != null ? '<span class="ap-btn primary" data-action="save-next">Save plate ›</span>' : '<div class="muted">Pick a plate above to start.</div>'}
-    <div class="dots" style="margin-top:10px">${m.status.map((s) => `<i class="${s === 'done' ? 'done' : ''}"></i>`).join('')}</div>
-    <div class="muted" style="margin-top:4px">● mapped &nbsp; ● not yet</div>
+    <div class="muted" style="margin-top:8px">Saved plates turn <span style="color:var(--goal)">green</span>.</div>
     <div class="note" style="margin-top:10px">If pressing a plate jams at an edge, you won't see its real connections — press the
       other direction, or move that plate toward center first, then map it.</div>
     ${allMapped(m) ? '<div style="margin-top:12px"><span class="ap-btn primary" data-action="goto-solve">All mapped — Solve ›</span></div>' : ''}`;
   col.appendChild(foot);
 
-  createBoard(boardHost, { positions: state.positions, selectable: true, highlightPlate: active, rowsRight });
+  // labels go green once a plate is saved
+  const labels = state.positions.map((p, i) => `<b${m.status[i] === 'done' ? ' class="done"' : ''}>P${i + 1}</b> · ${p}`);
+  createBoard(boardHost, { positions: state.positions, selectable: true, highlightPlate: active, labels, rowsRight });
   return col;
 }
 

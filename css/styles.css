@@ -179,6 +179,7 @@ body {
 .rel-btn.on-with { background: #1b2e1d; border-color: #2f5c37; color: var(--goal); font-weight: 600; }
 .rel-btn.on-opp { background: #2e1b18; border-color: #5c2f24; color: var(--danger); font-weight: 600; }
 .self-note { font-size: 12px; color: #8a8378; font-style: italic; border: 1px dashed #3a3833; border-radius: 6px; padding: 5px 12px; white-space: nowrap; }
+.tp-2dlabel b.done { color: var(--goal); }
 
 .chip.with { color: var(--goal); border-color: #2f5c37; }
 .chip.opp { color: var(--danger); border-color: #5c2f24; }
