@@ -20,3 +20,14 @@ the "Keyboard shortcuts" label to see the full list.
     node --test
 
 (Requires Node 18+; no dependencies to install.)
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+## Disclaimer
+
+This is an unofficial, fan-made tool. It is not affiliated with, endorsed by, or
+sponsored by THQ Nordic, Alkimia Interactive, or any rights holder of the Gothic
+franchise. "Gothic" and "Gothic 1 Remake" are trademarks of their respective
+owners. No game assets are included or distributed with this project.
