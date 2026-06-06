@@ -60,6 +60,34 @@ export function createBoard(host, s) {
       field.appendChild(hole);
     }
 
+    if (s.draggable) {
+      const slideEls = [tray, ...field.querySelectorAll('.tp-hole2')];
+      for (const el of slideEls) {
+        el.style.cursor = 'grab';
+        el.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const startX = e.clientX;
+          const startPos = s.positions[i];
+          const colW = field.getBoundingClientRect().width / FIELD_COLS;
+          let lastPos = startPos;
+          document.body.classList.add('tp-dragging');
+          s.onSetPosition?.(i, startPos); // selecting the plate (no-move click)
+          const onMove = (ev) => {
+            const dxCols = Math.round((ev.clientX - startX) / colW);
+            const next = dragToPosition(startPos, dxCols);
+            if (next !== lastPos) { lastPos = next; s.onSetPosition?.(i, next); }
+          };
+          const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            document.body.classList.remove('tp-dragging');
+          };
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+        });
+      }
+    }
+
     if (s.selectable) {
       for (const el of [lbl, field]) {
         el.dataset.action = 'select-plate';
