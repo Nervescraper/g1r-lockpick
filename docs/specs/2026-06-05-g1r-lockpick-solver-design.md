@@ -150,11 +150,12 @@ yet**, and a plate's row can be revisited and revised by clicking it again.
   shows a non-interactive placeholder. "Save plate" stores the row and marks it mapped; a
   non-blocking "Suggested" hint points at the next safe plate; progress dots show mapped /
   not-yet; a note explains the edge-jam caveat.
-- **Solve:** big **next move** callout (e.g. `P4 → Left ✓ safe`) with what it shifts and
-  edge-safety; **Back / Did it › / Edit positions** controls; the full **plan** as a step
-  list with the current step highlighted; durability and projected breaks (0); a **coupling
-  reference** (move cards: "Press L P1 → P1 ◀ left, P3 ▶ right", with a left=+1 / right=−1
-  legend).
+- **Solve:** a **next move** callout (e.g. `P4 ◀ Left ✓ safe`) describing the shift it
+  causes. **Did it ›** advances a pointer through a **fixed plan** — completed steps stay
+  visible, marked ✓ — and **clicking any step jumps to it** (to resync if you mis-pressed or
+  did several without tapping the button). **Edit positions** re-solves from corrected
+  positions. Plan arrows show the press direction (◀ Left, ▶ Right); a **connections
+  reference** lists, per plate, which others move *with* / *opposite*.
 - If the player deviates mid-solve, **Edit positions** corrects the state and the plan
   re-computes instantly.
 

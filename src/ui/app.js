@@ -34,14 +34,15 @@ function freshSetup(n) {
 }
 
 function persist() {
-  const { stage, n, positions, mapping, lockName, lockLoaded } = state;
-  saveSession(store, { stage, n, positions, mapping, lockName, lockLoaded });
+  const { stage, n, positions, mapping, lockName, lockLoaded, plan, planIndex, solveStart } = state;
+  saveSession(store, { stage, n, positions, mapping, lockName, lockLoaded, plan, planIndex, solveStart });
 }
 
 // ---------- helpers ----------
 
 const plateLabel = (i) => `P${i + 1}`;
 const shiftWord = (delta) => (delta > 0 ? 'left' : 'right');
+const dirArrow = (dir) => (dir === 'L' ? '◀' : '▶');
 
 function describeMove(coupling, positions, plate, dir) {
   const d = moveDelta(coupling, plate, dir);
@@ -267,6 +268,38 @@ function mappingView() {
 
 // ---------- Solve ----------
 
+function initSolve() {
+  state.solveStart = state.positions.slice();
+  state.plan = solve(state.positions, state.mapping.coupling);
+  state.planIndex = 0;
+}
+
+// Positions are derived from the fixed plan: start + the first `planIndex` moves.
+function computeSolvePositions() {
+  let p = state.solveStart.slice();
+  for (let k = 0; k < state.planIndex; k++) {
+    const mv = state.plan[k];
+    p = applyMove(p, state.mapping.coupling, mv.plate, mv.dir);
+  }
+  return p;
+}
+
+function planCardEl() {
+  const steps = state.plan
+    .map((mv, i) => {
+      const cls = i < state.planIndex ? 'past' : i === state.planIndex ? 'cur' : '';
+      const check = i < state.planIndex ? ' ✓' : '';
+      return `<div class="${cls}" data-action="goto-step" data-i="${i}">${i + 1} · ${plateLabel(
+        mv.plate
+      )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}</div>`;
+    })
+    .join('');
+  const card = document.createElement('div');
+  card.className = 'ap-card';
+  card.innerHTML = `<div class="ap-h">Plan · click a step to jump there</div><div class="ap-steplist">${steps}</div>`;
+  return card;
+}
+
 function solvePanel(side, boardProps) {
   const coupling = state.mapping.coupling;
 
@@ -279,22 +312,9 @@ function solvePanel(side, boardProps) {
     return boardProps;
   }
 
-  if (isSolved(state.positions)) {
-    const card = document.createElement('div');
-    card.className = 'ap-card';
-    card.innerHTML = `<div class="success">✓ Lock open!</div>
-      <div class="muted" style="margin-top:6px">Every pin is at the center (4).</div>
-      <div style="margin-top:12px">
-        <span class="ap-btn primary" data-action="save-lock">Save this lock</span>
-        <span class="ap-btn" data-action="new-lock">New lock</span>
-        <span class="flash">${flash}</span>
-      </div>`;
-    side.appendChild(card);
-    return boardProps;
-  }
+  if (state.plan === undefined) initSolve();
 
-  const plan = solve(state.positions, coupling);
-  if (plan === null) {
+  if (state.plan === null) {
     const card = document.createElement('div');
     card.className = 'ap-card';
     card.innerHTML = `<div class="ap-h">No solution found</div>
@@ -308,20 +328,28 @@ function solvePanel(side, boardProps) {
     return boardProps;
   }
 
-  const next = plan[0];
-  state.nextMove = next;
-  const dirArrow = (dir) => (dir === 'L' ? '◀' : '▶');
-  const steps = plan
-    .map(
-      (mv, i) =>
-        `<div class="${i === 0 ? 'cur' : ''}">${i + 1} · ${plateLabel(mv.plate)} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}</div>`
-    )
-    .join('');
+  if (state.planIndex >= state.plan.length) {
+    const card = document.createElement('div');
+    card.className = 'ap-card';
+    card.innerHTML = `<div class="success">✓ Lock open!</div>
+      <div class="muted" style="margin-top:6px">Every pin is at the center (4).</div>
+      <div style="margin-top:12px">
+        <span class="ap-btn primary" data-action="save-lock">Save this lock</span>
+        <span class="ap-btn" data-action="new-lock">New lock</span>
+        <span class="flash">${flash}</span>
+      </div>`;
+    side.appendChild(card);
+    if (state.plan.length) side.appendChild(planCardEl());
+    return boardProps;
+  }
+
+  const next = state.plan[state.planIndex];
+  const remaining = state.plan.length - state.planIndex;
 
   const nextCard = document.createElement('div');
   nextCard.className = 'ap-card';
   nextCard.innerHTML = `
-    <div class="ap-nm-label">Next move · ${plan.length} left</div>
+    <div class="ap-nm-label">Next move · ${remaining} left</div>
     <div class="ap-nm">${plateLabel(next.plate)} <span class="dir">${dirArrow(next.dir)} ${DIR_WORD[next.dir]}</span>
       <span class="badge safe">✓ safe</span></div>
     <div class="ap-nm-sub">${describeMove(coupling, state.positions, next.plate, next.dir)}. No plate hits an edge.</div>
@@ -331,11 +359,7 @@ function solvePanel(side, boardProps) {
     </div>`;
   side.appendChild(nextCard);
 
-  const planCard = document.createElement('div');
-  planCard.className = 'ap-card';
-  planCard.innerHTML = `<div class="ap-h">Plan</div><div class="ap-steplist">${steps}</div>`;
-  side.appendChild(planCard);
-
+  side.appendChild(planCardEl());
   side.appendChild(couplingCard(coupling));
   return boardProps;
 }
@@ -390,7 +414,7 @@ appEl.addEventListener('click', (e) => {
       state.stage = 'discovery';
       suggestDefault();
       break;
-    case 'goto-solve': state.stage = 'solve'; state.editing = false; break;
+    case 'goto-solve': state.stage = 'solve'; state.editing = false; state.plan = undefined; break;
     case 'new-lock': state = freshSetup(state.n); break;
 
     case 'select-plate': {
@@ -408,13 +432,20 @@ appEl.addEventListener('click', (e) => {
     }
     case 'save-next': saveActivePlate(); break;
 
-    case 'did-it': {
-      const mv = state.nextMove;
-      state.positions = applyMove(state.positions, state.mapping.coupling, mv.plate, mv.dir);
+    case 'did-it':
+      if (state.plan && state.planIndex < state.plan.length) {
+        state.planIndex++;
+        state.positions = computeSolvePositions();
+      }
+      break;
+    case 'goto-step': {
+      const i = Math.max(0, Math.min(state.plan.length, +t.dataset.i));
+      state.planIndex = i;
+      state.positions = computeSolvePositions();
       break;
     }
     case 'edit-positions': state.editing = true; break;
-    case 'apply-edit': state.editing = false; break;
+    case 'apply-edit': state.editing = false; state.plan = undefined; break;
     case 'back-to-map': state.stage = 'discovery'; break;
     case 'save-lock': {
       const name = prompt('Name this lock:', state.lockName || 'Lock');
