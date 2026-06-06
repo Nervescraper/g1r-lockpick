@@ -310,15 +310,19 @@ function solvePanel(side, boardProps) {
 
   const next = plan[0];
   state.nextMove = next;
+  const dirArrow = (dir) => (dir === 'L' ? '◀' : '▶');
   const steps = plan
-    .map((mv, i) => `<div class="${i === 0 ? 'cur' : ''}">${i + 1} · ${plateLabel(mv.plate)} → ${DIR_WORD[mv.dir]}${i === 0 ? '  ◀' : ''}</div>`)
+    .map(
+      (mv, i) =>
+        `<div class="step-line${i === 0 ? ' cur' : ''}"><span>${i + 1} · ${plateLabel(mv.plate)} ${DIR_WORD[mv.dir]}</span><span class="step-arrow">${dirArrow(mv.dir)}</span></div>`
+    )
     .join('');
 
   const nextCard = document.createElement('div');
   nextCard.className = 'ap-card';
   nextCard.innerHTML = `
     <div class="ap-nm-label">Next move · ${plan.length} left</div>
-    <div class="ap-nm">${plateLabel(next.plate)} <span class="dir">→ ${DIR_WORD[next.dir]}</span>
+    <div class="ap-nm">${plateLabel(next.plate)} <span class="dir">${dirArrow(next.dir)} ${DIR_WORD[next.dir]}</span>
       <span class="badge safe">✓ safe</span></div>
     <div class="ap-nm-sub">${describeMove(coupling, state.positions, next.plate, next.dir)}. No plate hits an edge.</div>
     <div style="margin-top:12px">

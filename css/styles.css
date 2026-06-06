@@ -152,6 +152,8 @@ body {
 .ap-nm-sub { font-size: 12px; color: #9a9; margin-top: 6px; }
 .ap-steplist { font-size: 12px; color: #8a8a86; line-height: 1.7; max-height: 150px; overflow: auto; margin-top: 6px; }
 .ap-steplist .cur { color: #fff; font-weight: 600; }
+.ap-steplist .step-line { display: flex; justify-content: space-between; align-items: center; }
+.ap-steplist .step-arrow { color: var(--gold); font-weight: 700; margin-left: 12px; }
 .cpl-card { display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-bottom: 1px solid #232220; font-size: 12px; }
 .cpl-card:last-child { border-bottom: 0; }
 .cpl-card .mv { width: 86px; color: #cdc; }
