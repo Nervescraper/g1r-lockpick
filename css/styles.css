@@ -7,13 +7,29 @@ body {
   margin: 0; background: radial-gradient(120% 100% at 50% 0%, #232019 0%, #141310 70%);
   color: #d8d4cc; font: 14px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; min-height: 100vh;
 }
-.site-header { text-align: center; padding: 18px 0 6px; }
+.site-header { position: relative; text-align: center; padding: 18px 0 6px; }
+/* Mirror the .ap-bar rail (max-width 720, centered) so the star's right edge
+   tracks the 'Start over' button at every viewport width. */
+.site-star {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  width: min(720px, 100% - 36px);
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  line-height: 0; pointer-events: none;
+}
+.site-star .gh-mark, .site-star .github-button, .site-star iframe { pointer-events: auto; }
+.gh-mark { display: inline-flex; color: #8a8378; transition: color 0.15s; }
+.gh-mark:hover { color: var(--gold); }
 .site-header h1 {
   font-size: 22px; letter-spacing: 3px; text-transform: uppercase; color: #f0e2c6;
   margin: 0; font-weight: 700;
 }
 .site-header .sub { color: #8a8378; font-size: 12px; letter-spacing: 1px; }
 #app { max-width: 920px; margin: 0 auto; padding: 14px 18px 40px; }
+.site-footer {
+  max-width: 920px; margin: 0 auto; padding: 18px 18px 28px; text-align: center;
+  border-top: 1px solid var(--line); color: #6f6a60; font-size: 11px; line-height: 1.6;
+}
+.site-footer span { display: block; }
 
 /* ---- stage rail ---- */
 .ap-rail { display: flex; gap: 7px; font-size: 12px; margin: 4px 0 16px; justify-content: center; }
