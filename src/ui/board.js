@@ -1,6 +1,17 @@
 // Flat 2D board renderer. Rows are drawn P_n (top) → P1 (bottom) to match the game's
-// front-at-bottom orientation. Optional per-row right-hand content (mapping controls) and
-// row selection are supported so the mapping UI can live directly in the board.
+// front-at-bottom orientation. Each plate is a 7-hole slide that shifts left/right as a
+// unit on a 13-column field; column 7 is the fixed keyway (goal). Optional per-row
+// right-hand content (mapping controls) and row selection are supported so the mapping UI
+// can live directly in the board.
+
+export const FIELD_COLS = 13;
+export const KEYWAY_COL = 7; // 1-based centre column of the field (the goal)
+
+// Column geometry for a plate at position p (1..7) on the 13-wide field. The slide is 7
+// holes wide and its pin is the middle hole, so pinCol(4) === KEYWAY_COL (position 4 = home).
+export function slideCols(p) {
+  return { startCol: p, pinCol: p + 3 };
+}
 
 export function createBoard(host, s) {
   host.classList.add('tp');
