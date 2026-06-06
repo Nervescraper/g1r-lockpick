@@ -31,6 +31,15 @@ So for **8 plates** the solver is still optimal *if it answers*, but a pathologi
 case could give up. In practice solutions are found after exploring a tiny fraction of the
 space, so this is very unlikely to be observed — but it is a real gap.
 
+**Update (2026-06-06):** the solver now also minimizes plate switches among shortest
+plans (`docs/specs/2026-06-06-solver-minimize-plate-switches-design.md`). To do that the
+search state gained a `lastPlate` component, multiplying the reachable state space by up
+to `n+1`. The default node cap was raised to `8_000_000` so a worst-case 7-plate lock
+(`7^7 × 8 ≈ 6.6M` states) still completes. Move-count optimality is unchanged — moves are
+the primary cost; switches only break ties. The A* option below remains the recommended
+way to lift the cap unconditionally for 8 plates, and composes cleanly: an admissible
+heuristic would attach to the `moves` component without touching the switch logic.
+
 ## Option A — bump the cap (quick)
 
 Raise `maxNodes` to at least `7 ** N_MAX` (≈ 5.76M for 8 plates) so BFS can always exhaust

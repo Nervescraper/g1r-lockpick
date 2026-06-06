@@ -19,6 +19,7 @@ const CHANGELOG = [
   {
     date: '2026-06-06',
     items: [
+      'Solver now groups moves by plate where it can, so you re-select plates less often — same shortest, edge-free solution.',
       'Record chest contents — keep a loot list alongside each saved lock.',
       'Import and export saved locks, to back them up or move them between devices.',
     ],
