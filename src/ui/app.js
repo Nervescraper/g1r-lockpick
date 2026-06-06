@@ -515,6 +515,8 @@ function solvePanel(side, boardProps) {
 
   const next = state.plan[state.planIndex];
   const remaining = state.plan.length - state.planIndex;
+  boardProps.highlightPlate = next.plate;
+  boardProps.highlightKind = 'next';
 
   const nextCard = document.createElement('div');
   nextCard.className = 'ap-card';
