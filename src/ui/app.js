@@ -207,6 +207,7 @@ function render() {
 
   appEl.appendChild(wrap);
   reserveMoveDescHeight();
+  alignCycleBraces();
   fitPlanList();
   scrollCurrentStepIntoView();
   persist();
@@ -229,6 +230,21 @@ function reserveMoveDescHeight() {
   }
   sub.textContent = original;
   sub.style.minHeight = `${max}px`;
+}
+
+// Align every cycle's closing bracket to one column — the longest step line in
+// the whole plan — by widening each rows column to that max content width.
+function alignCycleBraces() {
+  const list = appEl.querySelector('.ap-steplist');
+  if (!list) return;
+  const groups = list.querySelectorAll('.cyc-rows');
+  if (!groups.length) return;
+  let max = 0;
+  for (const tx of list.querySelectorAll('.step-tx')) {
+    max = Math.max(max, tx.getBoundingClientRect().width);
+  }
+  const ROW_PAD = 4; // .cyc-rows > div left+right padding
+  groups.forEach((g) => { g.style.width = `${Math.ceil(max) + ROW_PAD}px`; });
 }
 
 // Grow the plan list to fill the leftover viewport height so the page itself
@@ -494,14 +510,15 @@ function computeSolvePositions() {
   return p;
 }
 
-// One move row.
+// One move row. The text is wrapped in .step-tx so its content width can be
+// measured (rows themselves may be stretched full-width).
 function stepRowHtml(i) {
   const mv = state.plan[i];
   const cls = i < state.planIndex ? 'past' : i === state.planIndex ? 'cur' : '';
   const check = i < state.planIndex ? ' ✓' : '';
-  return `<div class="${cls}" data-action="goto-step" data-i="${i}">${i + 1} · ${plateLabel(
+  return `<div class="${cls}" data-action="goto-step" data-i="${i}"><span class="step-tx">${i + 1} · ${plateLabel(
     mv.plate
-  )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}</div>`;
+  )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}</span></div>`;
 }
 
 // The ×N label for a cycle. While you're stepping through the run it counts down
