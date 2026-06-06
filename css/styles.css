@@ -259,3 +259,15 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 
 .chip.with { color: var(--goal); border-color: #2f5c37; }
 .chip.opp { color: var(--danger); border-color: #5c2f24; }
+
+/* ---- phones: keep the mapping row (board + Moves with/opposite) on-screen ---- */
+@media (max-width: 560px) {
+  /* tighter board so the 13-col field leaves room for the rel controls */
+  .tp-2d { --hole: 11px; --colgap: 2px; --label-w: 34px; --row-gap: 7px; }
+  .tp-2dlabel { font-size: 11px; }
+  /* stack each plate's two buttons into a narrow right-hand column that can shrink/wrap */
+  .tp-2dright { flex: 0 1 auto; min-width: 0; }
+  .rel { flex-direction: column; gap: 5px; width: 100%; }
+  .rel-btn { white-space: normal; text-align: center; padding: 6px 8px; }
+  .self-note { white-space: normal; }
+}
