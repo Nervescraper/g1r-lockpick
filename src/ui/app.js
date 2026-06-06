@@ -201,7 +201,22 @@ function render() {
   wrap.appendChild(footer);
 
   appEl.appendChild(wrap);
+  scrollCurrentStepIntoView();
   persist();
+}
+
+// Keep the current plan step one line down from the top of the steplist, so the
+// previous step stays visible for context (the whole app re-renders each action,
+// which would otherwise snap the list back to the top).
+function scrollCurrentStepIntoView() {
+  const list = appEl.querySelector('.ap-steplist');
+  if (!list) return;
+  const cur = list.querySelector('.cur');
+  if (cur) {
+    list.scrollTop = cur.offsetTop - list.offsetTop - cur.offsetHeight; // clamps at 0
+  } else {
+    list.scrollTop = list.scrollHeight; // plan complete — show the tail
+  }
 }
 
 function railEl() {
