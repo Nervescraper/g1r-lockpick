@@ -4,7 +4,10 @@ import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
 import { solve } from '../solver.js';
 import { findCycles } from '../cycles.js';
 import { createMapping, recommendNext, allMapped } from '../discovery.js';
-import { loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings } from '../storage.js';
+import {
+  loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
+  exportLocks, encodeShare, parseImport, classifyImport, sameIdentity,
+} from '../storage.js';
 
 const store = window.localStorage;
 const N_MIN = 3;
@@ -44,7 +47,10 @@ function freshSetup(n) {
 }
 
 function persist() {
-  const { stage, n, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart } = state;
+  const { n, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart } = state;
+  // The import screen is a transient overlay over the Lock step — never persist it as a
+  // saved session stage (a reload mid-import would otherwise restore an empty import view).
+  const stage = state.stage === 'import' ? 'lock' : state.stage;
   // While editing positions in Solve, changes stay pending until Apply — persist the
   // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
   const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
@@ -66,17 +72,8 @@ function composeName() {
 
 // Another saved lock (not this one) with the same location + type + description.
 function findDuplicate() {
-  const loc = (state.location || '').trim().toLowerCase();
-  const desc = (state.description || '').trim().toLowerCase();
-  return (
-    loadLocks(store).find(
-      (l) =>
-        l.id !== state.lockId &&
-        (l.location || '').trim().toLowerCase() === loc &&
-        (l.kind || 'Chest') === state.kind &&
-        (l.description || '').trim().toLowerCase() === desc
-    ) || null
-  );
+  const me = { location: state.location, kind: state.kind, description: state.description };
+  return loadLocks(store).find((l) => l.id !== state.lockId && sameIdentity(l, me)) || null;
 }
 
 function nameWarningHtml() {
@@ -190,6 +187,8 @@ function render() {
 
   if (state.stage === 'lock') {
     wrap.appendChild(lockStep());
+  } else if (state.stage === 'import') {
+    wrap.appendChild(importView());
   } else if (state.stage === 'discovery') {
     wrap.appendChild(mappingView());
   } else {
@@ -424,21 +423,19 @@ function lockStep() {
   const main = document.createElement('div');
   main.className = 'ap-main';
 
-  const locks = loadLocks(store).filter((l) => l.id !== state.lockId);
+  const allLocks = loadLocks(store);
+  const locks = allLocks.filter((l) => l.id !== state.lockId);
   const left = document.createElement('div');
   left.className = 'lock-col';
   left.innerHTML = `<div class="ap-card">
     <div class="ap-h">Load a saved lock</div>
     ${locks.length
-      ? `<div class="lock-list">${locks
-          .map(
-            (l) =>
-              `<div class="lock-item"><span data-action="load-lock" data-id="${l.id}" style="cursor:pointer">${escapeHtml(
-                l.name
-              )} <span class="muted">(${l.n} plates)</span></span><span class="x" data-action="del-lock" data-id="${l.id}">✕</span></div>`
-          )
-          .join('')}</div>`
+      ? `<div class="lock-list">${locks.map(lockRowHtml).join('')}</div>`
       : '<div class="muted">No saved locks yet — start a new one on the right →</div>'}
+    <div class="lock-io">
+      ${allLocks.length ? '<span class="ap-btn" data-action="export-all">⬆ Export all</span>' : ''}
+      <span class="ap-btn" data-action="import-open">⬇ Import</span>
+    </div>
   </div>`;
 
   const right = document.createElement('div');
@@ -454,6 +451,187 @@ function lockStep() {
   main.appendChild(right);
   holder.appendChild(main);
   return holder;
+}
+
+// One saved-lock row: load (name) · share · delete, with an inline share-code panel
+// when this lock's Share action is open (state.shareId).
+function lockRowHtml(l) {
+  const panel =
+    state.shareId === l.id
+      ? `<div class="share-panel">
+          <div class="muted" style="margin-bottom:4px">Copy this code and send it — paste it into Import on another device.</div>
+          <textarea class="share-code" readonly rows="3">${escapeHtml(encodeShare(l, isoNow()))}</textarea>
+          <div style="margin-top:6px"><span class="ap-btn" data-action="copy-share">Copy</span>
+            <span class="ap-btn" data-action="close-share">Close</span>
+            <span class="share-copied muted"></span></div>
+        </div>`
+      : '';
+  return `<div class="lock-row">
+    <div class="lock-item">
+      <span data-action="load-lock" data-id="${l.id}" style="cursor:pointer">${escapeHtml(l.name)} <span class="muted">(${l.n} plates)</span></span>
+      <span class="lock-acts">
+        <span class="io" data-action="share-lock" data-id="${l.id}" title="Share this lock">⇪</span>
+        <span class="x" data-action="del-lock" data-id="${l.id}">✕</span>
+      </span>
+    </div>
+    ${panel}
+  </div>`;
+}
+
+// ---------- Import ----------
+
+const isoNow = () => new Date().toISOString();
+
+// Short status word for a lock record, for the conflict review's side-by-side view.
+function lockStatusWord(l) {
+  if (!l.coupling) return 'not mapped';
+  const st = l.status || [];
+  return st.length && st.every((s) => s === 'done') ? 'mapped' : 'in progress';
+}
+
+function lockSummaryHtml(l) {
+  const loc = (l.location || '').trim();
+  const desc = (l.description || '').trim();
+  const sub = [loc, l.kind || 'Chest', desc].filter(Boolean).join(' · ');
+  return `<div class="cf-name">${escapeHtml(l.name || 'Unnamed lock')}</div>
+    <div class="muted">${escapeHtml(sub)}</div>
+    <div class="muted">${l.n} plates · ${lockStatusWord(l)}</div>`;
+}
+
+// The import screen: a paste/file input, then a results summary with a per-conflict
+// review list. All transient state lives on state.import.
+function importView() {
+  const imp = state.import || (state.import = { phase: 'input' });
+  const col = document.createElement('div');
+  col.className = 'lock-col import-col';
+
+  if (imp.phase === 'input') {
+    const card = document.createElement('div');
+    card.className = 'ap-card';
+    card.innerHTML = `<div class="ap-h">Import locks</div>
+      <div class="muted" style="margin-bottom:8px">Load a backup file (all locks) or paste a share code (one lock).</div>
+      <div style="margin:6px 0"><input type="file" accept=".json,application/json" data-action="import-file" /></div>
+      ${imp.fileName ? `<div class="muted">Selected: ${escapeHtml(imp.fileName)}</div>` : ''}
+      <div class="muted" style="margin:10px 0 4px">…or paste a share code / exported JSON:</div>
+      <textarea class="share-code" data-action="import-text" rows="4" placeholder="Paste here…">${escapeHtml(imp.text || '')}</textarea>
+      ${imp.error ? `<div class="note" style="border-left-color:var(--danger);margin-top:8px">${escapeHtml(imp.error)}</div>` : ''}
+      <div style="margin-top:12px">
+        <span class="ap-btn primary" data-action="import-parse">Review ›</span>
+        <span class="ap-btn" data-action="import-cancel">Cancel</span>
+      </div>`;
+    col.appendChild(card);
+    return col;
+  }
+
+  // results phase
+  const { newCount, identicalCount, invalidCount, conflicts, choices, done } = imp;
+  const parts = [];
+  if (newCount) parts.push(`${newCount} new imported`);
+  if (identicalCount) parts.push(`${identicalCount} already present`);
+  if (invalidCount) parts.push(`${invalidCount} invalid skipped`);
+  if (conflicts.length) parts.push(done ? `${conflicts.length} reviewed` : `${conflicts.length} to review`);
+
+  const card = document.createElement('div');
+  card.className = 'ap-card';
+  let body = `<div class="ap-h">Import ${done ? 'complete' : 'results'}</div>
+    <div class="muted" style="margin-bottom:8px">${parts.join(' · ') || 'Nothing to import.'}</div>`;
+
+  if (conflicts.length && !done) {
+    body += `<div class="muted" style="margin-bottom:8px">These match a lock you already have. Choose what to do with each, then Apply.</div>`;
+    body += conflicts
+      .map((c, i) => {
+        const ch = choices[i];
+        return `<div class="cf-row">
+          <div class="cf-side"><div class="cf-tag">You have</div>${lockSummaryHtml(c.existing)}</div>
+          <div class="cf-side"><div class="cf-tag">Incoming</div>${lockSummaryHtml(c.incoming)}</div>
+          <div class="cf-choice">
+            <span class="seg-opt ${ch === 'copy' ? 'on' : ''}" data-action="cf-choice" data-i="${i}" data-choice="copy">Add as copy</span>
+            <span class="seg-opt ${ch === 'skip' ? 'on' : ''}" data-action="cf-choice" data-i="${i}" data-choice="skip">Skip</span>
+          </div>
+        </div>`;
+      })
+      .join('');
+    body += `<div style="margin-top:12px">
+      <span class="ap-btn primary" data-action="import-apply">Apply ›</span>
+      <span class="ap-btn" data-action="import-cancel">Cancel</span>
+    </div>`;
+  } else {
+    body += `<div style="margin-top:12px"><span class="ap-btn primary" data-action="import-done">‹ Back to locks</span></div>`;
+  }
+
+  card.innerHTML = body;
+  col.appendChild(card);
+  return col;
+}
+
+// Read pasted text / loaded file, validate, auto-import the fresh locks, and set up the
+// conflict review. Stays on the input phase with an error if the input is unreadable.
+function runImportParse() {
+  const imp = state.import;
+  const text = (imp.fileText || imp.text || '').trim();
+  if (!text) { imp.error = 'Paste a share code or choose a file first.'; return; }
+  const parsed = parseImport(text);
+  if (!parsed) { imp.error = "That doesn't look like a g1r lock export."; return; }
+  const existing = loadLocks(store);
+  const { fresh, identical, conflicts } = classifyImport(parsed.locks, existing);
+  let newCount = 0;
+  for (const l of fresh) { saveLock(store, l); newCount++; }
+  state.import = {
+    phase: 'results',
+    newCount,
+    identicalCount: identical.length,
+    invalidCount: parsed.invalidCount,
+    conflicts,
+    choices: conflicts.map(() => 'skip'),
+    done: conflicts.length === 0,
+  };
+}
+
+// Commit the reviewer's choices: each "copy" conflict is saved under a fresh id so
+// nothing existing is overwritten.
+function runImportApply() {
+  const imp = state.import;
+  let added = 0;
+  imp.conflicts.forEach((c, i) => {
+    if (imp.choices[i] === 'copy') {
+      saveLock(store, { ...c.incoming, id: `lock-${Date.now()}-${i}` });
+      added++;
+    }
+  });
+  imp.newCount += added;
+  imp.done = true;
+}
+
+// Copy the open share panel's code to the clipboard, with a textarea-select fallback
+// for browsers without the async clipboard API. Shows a brief "Copied" note.
+function copyShareCode(btn) {
+  const panel = btn.closest('.share-panel');
+  const ta = panel && panel.querySelector('.share-code');
+  if (!ta) return;
+  const note = panel.querySelector('.share-copied');
+  const flash = (msg) => { if (note) note.textContent = msg; };
+  const text = ta.value;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => flash('Copied ✓'), () => flash('Press ⌘/Ctrl+C'));
+  } else {
+    ta.select();
+    try { document.execCommand('copy'); flash('Copied ✓'); } catch { flash('Press ⌘/Ctrl+C'); }
+  }
+}
+
+// Trigger a download of all saved locks as a JSON backup file.
+function exportAllLocks() {
+  const locks = loadLocks(store);
+  if (!locks.length) return;
+  const blob = new Blob([exportLocks(locks, isoNow())], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `g1r-locks-${isoNow().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function setupPanel() {
@@ -873,15 +1051,35 @@ appEl.addEventListener('click', (e) => {
       const lock = getLock(store, id);
       if (!window.confirm(`Delete ${lock ? `"${lock.name}"` : 'this lock'}? This can't be undone.`)) break;
       deleteLock(store, id);
+      if (state.shareId === id) state.shareId = undefined;
       if (state.lockId === id) { state.lockId = undefined; state.location = ''; state.kind = 'Chest'; state.description = ''; }
       break;
     }
+    case 'export-all': exportAllLocks(); return; // download only — no re-render needed
+    case 'share-lock': state.shareId = state.shareId === t.dataset.id ? undefined : t.dataset.id; break;
+    case 'close-share': state.shareId = undefined; break;
+    case 'copy-share': copyShareCode(t); return;
+    case 'import-open': state.stage = 'import'; state.import = { phase: 'input' }; break;
+    case 'import-parse': runImportParse(); break;
+    case 'import-apply': runImportApply(); break;
+    case 'import-cancel':
+    case 'import-done': state.stage = 'lock'; state.import = undefined; break;
+    case 'cf-choice': state.import.choices[+t.dataset.i] = t.dataset.choice; break;
     default: return;
   }
   render();
 });
 
 appEl.addEventListener('input', (e) => {
+  // Import paste box: keep the typed text without re-rendering (keeps focus); a new
+  // paste also clears any stale file selection and error so Review uses what's visible.
+  if (e.target.closest('[data-action="import-text"]') && state.import) {
+    state.import.text = e.target.value;
+    state.import.fileText = undefined;
+    state.import.fileName = undefined;
+    state.import.error = undefined;
+    return;
+  }
   // update text fields + autosave without re-rendering (keeps the input focused)
   if (e.target.closest('[data-action="loc-input"]')) state.location = e.target.value;
   else if (e.target.closest('[data-action="desc-input"]')) state.description = e.target.value;
@@ -924,6 +1122,22 @@ window.addEventListener('keydown', (e) => {
   else return; // already at an end — nothing changes
   state.positions = computeSolvePositions();
   render();
+});
+
+// Read a chosen backup file into the import state, then re-render to show its name.
+appEl.addEventListener('change', (e) => {
+  if (!e.target.closest('[data-action="import-file"]') || !state.import) return;
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.import.fileText = String(reader.result || '');
+    state.import.fileName = file.name;
+    state.import.text = undefined;
+    state.import.error = undefined;
+    render();
+  };
+  reader.readAsText(file);
 });
 
 window.addEventListener('resize', fitPlanList);

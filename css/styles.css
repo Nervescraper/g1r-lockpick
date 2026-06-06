@@ -184,8 +184,26 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .sc.cur { background: #3a2f12; border-color: var(--gold); color: var(--gold); font-weight: 700; }
 .sc.goal { outline: 1px dashed #5c5026; }
 .lock-list { display: flex; flex-direction: column; gap: 6px; }
+.lock-row { display: flex; flex-direction: column; gap: 6px; }
 .lock-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
-.lock-item .x { color: #8a6; cursor: pointer; color: #a55; }
+.lock-acts { display: flex; align-items: center; gap: 10px; }
+.lock-item .x { cursor: pointer; color: #a55; }
+.lock-item .io { cursor: pointer; color: #8a9; font-size: 15px; }
+.lock-item .io:hover { color: var(--gold); }
+
+/* ---- import / export ---- */
+.lock-io { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.import-col { max-width: 640px; margin: 0 auto; }
+.share-panel { padding: 8px 9px; border: 1px solid var(--line); border-radius: 6px; background: #16140f; }
+.share-code { width: 100%; box-sizing: border-box; padding: 7px 9px; background: #141310; border: 1px solid #3a3833; border-radius: 6px; color: #cdb; font-family: ui-monospace, Menlo, monospace; font-size: 11px; resize: vertical; }
+.share-copied { margin-left: 8px; }
+.cf-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.cf-side { font-size: 12px; }
+.cf-tag { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #777; margin-bottom: 2px; }
+.cf-name { color: #e8e2d6; font-size: 13px; }
+.cf-choice { display: flex; flex-direction: column; gap: 4px; }
+.seg-opt { padding: 4px 10px; font-size: 12px; color: #888; cursor: pointer; border: 1px solid #333; border-radius: 6px; text-align: center; white-space: nowrap; }
+.seg-opt.on { background: #23394a; border-color: #34526a; color: var(--shl); font-weight: 600; }
 
 /* ---- discovery ---- */
 .outcome { display: flex; gap: 8px; margin: 10px 0 8px; }
