@@ -238,7 +238,10 @@ function scrollCurrentStepIntoView() {
   if (!list) return;
   const cur = list.querySelector('.cur');
   if (cur) {
-    list.scrollTop = cur.offsetTop - list.offsetTop - cur.offsetHeight; // clamps at 0
+    // Measure cur's position relative to the list via bounding rects so this is
+    // correct regardless of intervening positioned wrappers (e.g. .cyc-group).
+    const top = cur.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    list.scrollTop = top - cur.offsetHeight; // keep one line of context above; clamps at 0
   } else {
     list.scrollTop = list.scrollHeight; // plan complete — show the tail
   }

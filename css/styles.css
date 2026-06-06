@@ -203,10 +203,19 @@ body {
 .ap-steplist .past { color: #5f6b60; }
 .ap-steplist .step-arrow { color: var(--gold); font-weight: 700; }
 .ap-steplist .past .step-arrow { color: #4f7a56; }
-/* cycle indicators in the plan list — one brace spans the whole grouped run */
-.ap-steplist > .cyc-group { padding: 0; cursor: default; border-radius: 0; }
+/* cycle indicators in the plan list — one bracket (with top/bottom feet) spans the run */
+.ap-steplist > .cyc-group { padding: 1px 2px 1px 11px; cursor: default; border-radius: 0; }
 .ap-steplist > .cyc-group:hover { background: none; }
-.cyc-group { border-left: 2px solid var(--gold); margin: 2px 0 2px 2px; padding-left: 7px; border-radius: 4px 0 0 4px; }
+.cyc-group { position: relative; margin: 3px 0; }
+.cyc-group::before {
+  content: '';
+  position: absolute;
+  left: 2px; top: 1px; bottom: 1px;
+  width: 6px;
+  border: 2px solid var(--gold);
+  border-right: 0;
+  border-radius: 3px 0 0 3px;
+}
 .cyc-group > div { cursor: pointer; padding: 1px 2px; border-radius: 4px; }
 .cyc-group > div:hover { background: #232220; }
 .cyc-badge { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--gold); }
