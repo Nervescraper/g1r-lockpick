@@ -1,0 +1,9 @@
+# Cloudflare Pages headers.
+# The app's JS/CSS carry no content hash, so tell browsers to always revalidate
+# them. ETags make that a cheap 304 when nothing changed, but a republish is picked
+# up on the very next load instead of being masked by a stale 4-hour cache. This
+# also covers the ES-module imports under /src/ that a query-string bump can't reach.
+/css/*
+  Cache-Control: public, max-age=0, must-revalidate
+/src/*
+  Cache-Control: public, max-age=0, must-revalidate

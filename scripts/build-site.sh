@@ -17,5 +17,8 @@ cp -R "$ROOT/src" "$DIST/"
 cp "$ROOT/favicon.ico" "$ROOT/favicon-32.png" "$ROOT/favicon.svg" \
    "$ROOT/apple-touch-icon.png" "$DIST/"
 
+# Cloudflare Pages config — cache-control headers so app code revalidates.
+cp "$ROOT/_headers" "$DIST/"
+
 echo "Built site into $DIST"
 find "$DIST" -type f | sed "s|$DIST/|  |" | sort
