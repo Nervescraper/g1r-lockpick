@@ -41,6 +41,9 @@ body {
 .ap-locktitle { text-align: center; color: var(--gold); font-size: 14px; letter-spacing: 1px; margin: -6px 0 12px; }
 .lock-intro { text-align: center; color: #8a8378; font-size: 13px; margin: 0 0 12px; }
 .lock-col { flex: 1 1 0; min-width: 280px; }
+.ap-footer { text-align: center; margin-top: 34px; }
+.ap-wipe { font-size: 11px; color: #6b665c; cursor: pointer; text-decoration: underline; }
+.ap-wipe:hover { color: #c2603f; }
 @media (max-width: 760px) { .ap-main { flex-direction: column; } }
 
 .ap-boardtop { display: flex; justify-content: flex-end; min-height: 24px; }

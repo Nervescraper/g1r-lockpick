@@ -195,6 +195,11 @@ function render() {
     createBoard(boardHost, boardProps);
   }
 
+  const footer = document.createElement('div');
+  footer.className = 'ap-footer';
+  footer.innerHTML = '<span class="ap-wipe" data-action="wipe">⟲ Reset all data &amp; reload</span>';
+  wrap.appendChild(footer);
+
   appEl.appendChild(wrap);
   persist();
 }
@@ -645,6 +650,12 @@ appEl.addEventListener('click', (e) => {
       }
       break;
     }
+    case 'wipe':
+      if (window.confirm('Clear ALL app data — current work and every saved lock — then reload?')) {
+        localStorage.clear();
+        location.reload();
+      }
+      return;
     case 'del-lock': {
       const id = t.dataset.id;
       const lock = getLock(store, id);
