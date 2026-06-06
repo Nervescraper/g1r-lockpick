@@ -8,7 +8,7 @@ build:
 
 # Build, then deploy dist/ to Cloudflare Pages
 publish: build
-    npx wrangler pages deploy dist --project-name=g1r-lockpick
+    npx wrangler pages deploy dist --project-name=g1r
 
 # Run the test suite
 test:
