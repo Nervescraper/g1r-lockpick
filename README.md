@@ -1,7 +1,50 @@
 # Gothic 1 Remake Lockpick Solver
 
 Web tool to map and solve the Gothic 1 Remake lockpicking puzzles.
-See `docs/specs/2026-06-05-g1r-lockpick-solver-design.md`.
+
+**▶ Use it now: [g1r.nervemart.com](https://g1r.nervemart.com)** — runs entirely in your
+browser, nothing to install. Keep it open on a second monitor or your phone while you play.
+
+## What it does
+
+Gothic 1 Remake locks are a coupled-sliders puzzle: a stack of plates, each with a pin that
+has to reach the center hole, where moving one plate also nudges others by hidden, fixed
+relationships. Working that out by hand — and finding a move order that never snaps a
+lockpick — is tedious and error-prone. This tool maps the lock with you, then computes a
+**safe, edge-free solution** (zero durability cost) and walks you through it move by move.
+
+## How to use it
+
+The app moves through four steps, shown as a clickable rail across the top:
+
+1. **Lock** — start a new lock (name it by location and type) or reload a saved one. Saved
+   locks jump straight to wherever you left off.
+2. **Setup** — enter the number of plates and each plate's current pin position. This is
+   saved as the lock's *reset point*.
+3. **Map the lock** — probe each plate and record how the other plates move (same direction
+   or opposite). The app guides you to avoid blocked moves, which cost a lockpick.
+4. **Solve** — once the lock is mapped, the app computes the shortest safe sequence to bring
+   every pin to the center and steps you through it. Reset the pins anytime to re-plan.
+
+If the solver reports **no solution**, the mapping is almost certainly incomplete or has a
+wrong cell — head back to **Map the lock** and double-check.
+
+## Keyboard shortcuts
+
+While solving, you can step through the plan without the mouse:
+
+- **Enter / Space / ↓ / →** — advance to the next move
+- **↑ / ← / Backspace** — go back a move
+- **R** — reset the pins to the lock's starting positions
+
+In **Setup** (and "Edit positions" while solving), **1–7** set the active plate's pin and the
+**arrow keys** move between plates. A checkbox at the bottom of the page turns shortcuts off
+for anyone who prefers not to use them; hover the "Keyboard shortcuts" label to see the list.
+
+## Your data stays local
+
+Your saved locks and progress live only in your browser (via `localStorage`) — nothing is
+uploaded to a server. Clearing your browser data for the site removes them.
 
 ## License
 
