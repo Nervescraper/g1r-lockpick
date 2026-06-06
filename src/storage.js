@@ -1,5 +1,6 @@
 const LOCKS_KEY = 'g1r.locks';
 const SESSION_KEY = 'g1r.session';
+const SETTINGS_KEY = 'g1r.settings';
 
 export function loadLocks(store) {
   const raw = store.getItem(LOCKS_KEY);
@@ -34,4 +35,13 @@ export function loadSession(store) {
   return raw ? JSON.parse(raw) : null;
 }
 
-export { LOCKS_KEY, SESSION_KEY };
+export function loadSettings(store) {
+  const raw = store.getItem(SETTINGS_KEY);
+  return raw ? JSON.parse(raw) : {};
+}
+
+export function saveSettings(store, settings) {
+  store.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+export { LOCKS_KEY, SESSION_KEY, SETTINGS_KEY };

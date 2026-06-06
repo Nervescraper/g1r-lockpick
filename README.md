@@ -8,9 +8,12 @@ See `docs/specs/2026-06-05-g1r-lockpick-solver-design.md`.
     python3 scripts/serve.py        # http://localhost:8000
 
 This dev server disables caching, so a normal reload always loads your latest JS/CSS
-(plain `python3 -m http.server` can serve stale cached modules). The page also has a
-**"⟲ Reset all data & reload"** link at the bottom that clears all saved state
-(current work + saved locks) and reloads.
+(plain `python3 -m http.server` can serve stale cached modules).
+
+While solving, keyboard shortcuts step through the plan — **Enter / Space / ↓ / →** to
+advance and **↑ / ← / Backspace** to go back (**R** resets the pins). A checkbox at the
+bottom of the page turns the shortcuts off for anyone who prefers not to use them; hover
+the "Keyboard shortcuts" label to see the full list.
 
 ## Run the tests
 

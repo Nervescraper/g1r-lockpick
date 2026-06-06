@@ -2,7 +2,7 @@ import { createBoard } from './board.js';
 import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
 import { solve } from '../solver.js';
 import { createMapping, recommendNext, allMapped } from '../discovery.js';
-import { loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession } from '../storage.js';
+import { loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings } from '../storage.js';
 
 const store = window.localStorage;
 const N_MIN = 3;
@@ -13,6 +13,8 @@ const appEl = document.getElementById('app');
 
 let state = restore();
 let flash = '';
+let settings = loadSettings(store);
+const kbdEnabled = () => settings.keyboardShortcuts !== false; // on by default
 
 function restore() {
   const s = loadSession(store);
@@ -197,7 +199,9 @@ function render() {
 
   const footer = document.createElement('div');
   footer.className = 'ap-footer';
-  footer.innerHTML = '<span class="ap-wipe" data-action="wipe">⟲ Reset all data &amp; reload</span>';
+  footer.innerHTML = `<label class="ap-kbd">
+      <input type="checkbox" data-action="toggle-kbd"${kbdEnabled() ? ' checked' : ''}>
+      <span class="ap-kbd-tip" data-tip="Advance:  Enter · Space · ↓ · →&#10;Back:  ↑ · ← · Backspace&#10;Reset pins:  R">Keyboard shortcuts</span></label>`;
   wrap.appendChild(footer);
 
   appEl.appendChild(wrap);
@@ -685,12 +689,10 @@ appEl.addEventListener('click', (e) => {
       }
       break;
     }
-    case 'wipe':
-      if (window.confirm('Clear ALL app data — current work and every saved lock — then reload?')) {
-        localStorage.clear();
-        location.reload();
-      }
-      return;
+    case 'toggle-kbd':
+      settings.keyboardShortcuts = !kbdEnabled();
+      saveSettings(store, settings);
+      break;
     case 'del-lock': {
       const id = t.dataset.id;
       const lock = getLock(store, id);
@@ -715,13 +717,31 @@ appEl.addEventListener('input', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (e.metaKey || e.ctrlKey || e.altKey) return; // leave Cmd/Ctrl+R for page reload
-  if (e.key !== 'r' && e.key !== 'R') return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return; // leave Cmd/Ctrl+R etc. for the browser
+  if (!kbdEnabled()) return;
   const tag = (e.target.tagName || '').toUpperCase();
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (!state.initial) return;
-  state.positions = state.initial.slice();
-  if (state.stage === 'solve') state.plan = undefined;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't hijack typing or the toggle
+
+  // R — reset the pins to the lock's starting positions
+  if (e.key === 'r' || e.key === 'R') {
+    if (!state.initial) return;
+    state.positions = state.initial.slice();
+    if (state.stage === 'solve') state.plan = undefined;
+    e.preventDefault();
+    render();
+    return;
+  }
+
+  // Step through the plan while solving. Advance: Enter / Space / ↓ / →. Back: ↑ / ←.
+  if (state.stage !== 'solve' || state.editing || !Array.isArray(state.plan)) return;
+  const advance = ['Enter', ' ', 'Spacebar', 'ArrowDown', 'ArrowRight'].includes(e.key);
+  const back = ['ArrowUp', 'ArrowLeft', 'Backspace'].includes(e.key);
+  if (!advance && !back) return;
+  e.preventDefault();
+  if (advance && state.planIndex < state.plan.length) state.planIndex++;
+  else if (back && state.planIndex > 0) state.planIndex--;
+  else return; // already at an end — nothing changes
+  state.positions = computeSolvePositions();
   render();
 });
 

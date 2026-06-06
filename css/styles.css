@@ -41,9 +41,18 @@ body {
 .ap-locktitle { text-align: center; color: var(--gold); font-size: 14px; letter-spacing: 1px; margin: -6px 0 12px; }
 .lock-intro { text-align: center; color: #8a8378; font-size: 13px; margin: 0 0 12px; }
 .lock-col { flex: 1 1 0; min-width: 280px; }
-.ap-footer { text-align: center; margin-top: 34px; }
-.ap-wipe { font-size: 11px; color: #6b665c; cursor: pointer; text-decoration: underline; }
-.ap-wipe:hover { color: #c2603f; }
+.ap-footer { display: flex; align-items: center; justify-content: center; margin-top: 34px; }
+.ap-kbd { font-size: 11px; color: #6b665c; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; user-select: none; }
+.ap-kbd input { cursor: pointer; accent-color: var(--gold); }
+.ap-kbd-tip { position: relative; border-bottom: 1px dotted #6b665c; cursor: help; }
+.ap-kbd-tip::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+  white-space: pre; text-align: left; font-size: 11px; line-height: 1.7; color: #cfcabd;
+  background: #1b1a18; border: 1px solid var(--line); border-radius: 7px; padding: 8px 11px;
+  opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 5;
+}
+.ap-kbd-tip:hover::after { opacity: 1; }
 @media (max-width: 760px) { .ap-main { flex-direction: column; } }
 
 .ap-boardtop { display: flex; justify-content: flex-end; min-height: 24px; }
