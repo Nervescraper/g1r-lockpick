@@ -181,12 +181,15 @@ up/down. Left = pin position +1, Right = pin position −1.
 
 ## 8. Persistence
 
-- Saved **lock** record: `{ id, name, n, initial (starting pin positions), coupling (N×N of
-  −1/0/+1), status, notes }`.
-- A lock can be **named on the Setup screen** (optional); a named lock then **auto-saves**
-  as you set its count, initial pins, and connections, and appears in the saved-locks list.
-  Loading a lock restores its initial pins and coupling — going straight to Solve if fully
-  mapped, or resuming mapping otherwise.
+- Saved **lock** record: `{ id, name, location, kind (Chest/Door/Other), description, n,
+  initial (starting pin positions), coupling (N×N of −1/0/+1), status, notes }`. The display
+  `name` is composed as `location · kind · description`.
+- A lock is identified on the Setup screen by **General location** (free text, with
+  quick-fill buttons for Old/New/Swamp/Orc Camp), a **Chest/Door/Other** type, and an
+  optional **Description**. Once a location or description is entered the lock **auto-saves**
+  (count, initial pins, connections) and appears in the saved-locks list. Loading restores
+  its fields and initial pins — going straight to Solve if fully mapped, or resuming mapping
+  otherwise.
 - The **initial pin state** is the lock's reset point. A **Reset** control and the **`R`**
   hotkey set the current pins back to it (mirroring the game's reset) and re-plan from there;
   "Edit positions" updates the reset point.

@@ -29,26 +29,34 @@ function freshSetup(n) {
     mapping: null,
     rel: {},
     editing: false,
-    lockName: '',
+    location: '',
+    kind: 'Chest',
+    description: '',
     lockId: undefined,
     lockLoaded: false,
   };
 }
 
 function persist() {
-  const { stage, n, positions, initial, mapping, lockName, lockId, lockLoaded, plan, planIndex, solveStart } = state;
-  saveSession(store, { stage, n, positions, initial, mapping, lockName, lockId, lockLoaded, plan, planIndex, solveStart });
+  const { stage, n, positions, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart } = state;
+  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, lockId, lockLoaded, plan, planIndex, solveStart });
   syncLock();
 }
 
-// If the lock has a name, keep its saved record up to date (initial pins + coupling so far).
+function composeName() {
+  return [(state.location || '').trim(), state.kind, (state.description || '').trim()].filter(Boolean).join(' · ') || 'Unnamed lock';
+}
+
+// Once the lock is identifiable (a location or description), keep its saved record current.
 function syncLock() {
-  const name = (state.lockName || '').trim();
-  if (!name) return;
+  if (!(state.location || '').trim() && !(state.description || '').trim()) return;
   if (!state.lockId) state.lockId = `lock-${Date.now()}`;
   saveLock(store, {
     id: state.lockId,
-    name,
+    name: composeName(),
+    location: (state.location || '').trim(),
+    kind: state.kind,
+    description: (state.description || '').trim(),
     n: state.n,
     initial: (state.initial || state.positions).slice(),
     coupling: state.mapping ? state.mapping.coupling : null,
@@ -115,6 +123,7 @@ function escapeHtml(s) {
 // ---------- render ----------
 
 function render() {
+  syncLock(); // keep the saved-locks list current before it is read below
   appEl.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'ap';
@@ -207,7 +216,7 @@ function setupPanel() {
     : `<span class="ap-btn primary" data-action="start-mapping">Start mapping ›</span>`;
 
   card.innerHTML = `
-    <div class="ap-h">New lock${state.lockLoaded ? ` — ${escapeHtml(state.lockName)} loaded` : ''}</div>
+    <div class="ap-h">New lock${state.lockLoaded ? ` — ${escapeHtml(composeName())} loaded` : ''}</div>
     <div class="cnt">
       <span class="muted">Plates</span>
       <button class="step" data-action="n-dec">−</button>
@@ -217,9 +226,23 @@ function setupPanel() {
     </div>
     <div class="ap-h">Current pin position of each plate <span class="muted" style="text-transform:none;letter-spacing:0">— this is saved as the lock's reset point</span></div>
     ${positionRows()}
-    <div class="ap-h" style="margin-top:14px">Lock name (optional)</div>
-    <input class="lock-name-input" type="text" data-action="lock-name" placeholder="e.g. Old Camp chest" value="${escapeHtml(state.lockName || '')}" />
-    <div class="muted" style="margin-top:4px">Named locks save automatically (count, initial pins, and connections) and appear below.</div>
+    <div class="ap-h" style="margin-top:14px">Save this lock (optional)</div>
+    <div class="muted" style="margin-bottom:4px">General location</div>
+    <div class="fill-row">
+      ${['Old Camp', 'New Camp', 'Swamp Camp', 'Orc Camp']
+        .map((loc) => `<button class="ap-btn loc-fill${state.location === loc ? ' primary' : ''}" data-action="loc-fill" data-loc="${loc}">${loc}</button>`)
+        .join('')}
+    </div>
+    <input class="lock-name-input" type="text" data-action="loc-input" placeholder="General location…" value="${escapeHtml(state.location || '')}" />
+    <div class="muted" style="margin:10px 0 4px">Type</div>
+    <div class="kind-row">
+      ${['Chest', 'Door', 'Other']
+        .map((k) => `<label class="kind-opt" data-action="kind-set" data-kind="${k}"><input type="radio" name="kind" ${state.kind === k ? 'checked' : ''}/> ${k}</label>`)
+        .join('')}
+    </div>
+    <div class="muted" style="margin:10px 0 4px">Description</div>
+    <input class="lock-name-input" type="text" data-action="desc-input" placeholder="e.g. behind the throne" value="${escapeHtml(state.description || '')}" />
+    <div class="muted" style="margin-top:4px">Locks with a location or description save automatically and appear below.</div>
     <div style="margin-top:12px">${primary}
       ${state.lockLoaded ? '<span class="ap-btn" data-action="new-lock">Start a new lock</span>' : ''}
     </div>
@@ -448,6 +471,8 @@ appEl.addEventListener('click', (e) => {
       break;
     case 'goto-solve': state.stage = 'solve'; state.editing = false; state.plan = undefined; break;
     case 'new-lock': state = freshSetup(state.n); break;
+    case 'loc-fill': state.location = state.location === t.dataset.loc ? '' : t.dataset.loc; break;
+    case 'kind-set': state.kind = t.dataset.kind; break;
     case 'start-over':
       if (!state.mapping || window.confirm('Start over? This clears the current lock from the workspace (saved locks are kept).')) {
         state = freshSetup(state.n);
@@ -495,12 +520,13 @@ appEl.addEventListener('click', (e) => {
       break;
     case 'back-to-map': state.stage = 'discovery'; break;
     case 'save-lock': {
-      const name = prompt('Name this lock:', state.lockName || 'Lock');
-      if (name) {
-        state.lockName = name;
-        syncLock();
-        flash = 'Saved.';
+      if (!(state.location || '').trim() && !(state.description || '').trim()) {
+        const d = prompt('Describe this lock (location / which chest):', '');
+        if (!d) break;
+        state.description = d;
       }
+      syncLock();
+      flash = 'Saved.';
       break;
     }
     case 'load-lock': {
@@ -517,7 +543,9 @@ appEl.addEventListener('click', (e) => {
           state.lockLoaded = false;
         }
         state.lockId = lock.id;
-        state.lockName = lock.name;
+        state.location = lock.location ?? lock.name ?? '';
+        state.kind = lock.kind ?? 'Chest';
+        state.description = lock.description ?? '';
         state.stage = 'setup';
         state.editing = false;
         state.plan = undefined;
@@ -531,7 +559,7 @@ appEl.addEventListener('click', (e) => {
       const lock = getLock(store, id);
       if (!window.confirm(`Delete ${lock ? `"${lock.name}"` : 'this lock'}? This can't be undone.`)) break;
       deleteLock(store, id);
-      if (state.lockId === id) { state.lockId = undefined; state.lockName = ''; }
+      if (state.lockId === id) { state.lockId = undefined; state.location = ''; state.kind = 'Chest'; state.description = ''; }
       break;
     }
     default: return;
@@ -540,10 +568,9 @@ appEl.addEventListener('click', (e) => {
 });
 
 appEl.addEventListener('input', (e) => {
-  const el = e.target.closest('[data-action="lock-name"]');
-  if (!el) return;
-  state.lockName = el.value; // update + autosave without re-rendering (keeps the input focused)
-  syncLock();
+  // update text fields + autosave without re-rendering (keeps the input focused)
+  if (e.target.closest('[data-action="loc-input"]')) { state.location = e.target.value; persist(); }
+  else if (e.target.closest('[data-action="desc-input"]')) { state.description = e.target.value; persist(); }
 });
 
 window.addEventListener('keydown', (e) => {

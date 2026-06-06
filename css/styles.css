@@ -24,8 +24,13 @@ body {
 .ap-bar .ap-rail { margin: 0; }
 .ap-reset { position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 4px 11px; border-radius: 6px; border: 1px solid #3a3833; background: #221f1b; color: #b9b3a6; cursor: pointer; }
 .ap-reset:hover { color: #eee; border-color: #555; }
-.lock-name-input { width: 100%; max-width: 280px; padding: 7px 10px; background: #141310; border: 1px solid #3a3833; border-radius: 6px; color: #e8e2d6; font-size: 13px; }
+.lock-name-input { width: 100%; max-width: 300px; padding: 7px 10px; background: #141310; border: 1px solid #3a3833; border-radius: 6px; color: #e8e2d6; font-size: 13px; }
 .lock-name-input::placeholder { color: #6b665c; }
+.fill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.loc-fill { font-size: 11px; padding: 4px 10px; }
+.kind-row { display: flex; gap: 16px; }
+.kind-opt { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #cdc; cursor: pointer; }
+.kind-opt input { accent-color: var(--gold); }
 
 /* ---- layout ---- */
 .ap-main { display: flex; gap: 20px; align-items: flex-start; }
