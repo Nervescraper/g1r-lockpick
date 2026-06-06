@@ -698,7 +698,7 @@ function solvePanel(side, boardProps) {
     <div class="ap-nm-sub">${describeMove(coupling, state.positions, next.plate, next.dir)}. No plate hits an edge.</div>
     <div style="margin-top:12px">
       <span class="ap-btn primary" data-action="did-it">Did it ›</span>
-      <span class="ap-btn" data-action="reset-pins">Reset pins (R)</span>
+      <span class="ap-btn" data-action="reset-pins">Reset pins${isNarrowViewport() ? '' : ' (R)'}</span>
       <span class="ap-btn" data-action="edit-positions">Edit positions</span>
     </div>`;
   side.appendChild(nextCard);
