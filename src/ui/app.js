@@ -175,11 +175,17 @@ function railEl() {
   rail.className = 'ap-rail';
   const stages = [['setup', 'Setup'], ['discovery', 'Map the lock'], ['solve', 'Solve']];
   const order = { setup: 0, discovery: 1, solve: 2 };
+  const navigable = { setup: true, discovery: !!state.mapping, solve: !!state.mapping };
   for (const [key, label] of stages) {
     const span = document.createElement('span');
     span.textContent = (order[state.stage] > order[key] ? '✓ ' : '') + label;
     if (state.stage === key) span.className = 'active';
     else if (order[state.stage] > order[key]) span.className = 'done';
+    if (key !== state.stage && navigable[key]) {
+      span.classList.add('nav');
+      span.dataset.action = 'goto-stage';
+      span.dataset.stage = key;
+    }
     rail.appendChild(span);
   }
   return rail;
@@ -477,6 +483,13 @@ appEl.addEventListener('click', (e) => {
       suggestDefault();
       break;
     case 'goto-solve': state.stage = 'solve'; state.editing = false; state.plan = undefined; break;
+    case 'goto-stage': {
+      const target = t.dataset.stage;
+      if (target === 'setup') { state.stage = 'setup'; state.editing = false; }
+      else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; suggestDefault(); }
+      else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.editing = false; state.plan = undefined; }
+      break;
+    }
     case 'new-lock': state = freshSetup(state.n); break;
     case 'loc-fill': state.location = state.location === t.dataset.loc ? '' : t.dataset.loc; break;
     case 'kind-set': state.kind = t.dataset.kind; break;
