@@ -468,18 +468,17 @@ function stepRowHtml(i, extra = '', badge = '') {
   )} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}${check}${badge}</div>`;
 }
 
-// Expanded: list every move; a cycle run gets a left bracket + a ×N badge on its
-// first row.
+// Expanded: list every move. A cycle run wraps its rows in a single .cyc-group so
+// one continuous brace spans the whole run, with a ×N badge on the first row.
 function expandedSegHtml(seg) {
   if (seg.type === 'single') return stepRowHtml(seg.index);
   const end = seg.start + seg.length - 1;
-  let out = '';
+  let rows = '';
   for (let i = seg.start; i <= end; i++) {
-    const ends = (i === seg.start ? ' cyc-first' : '') + (i === end ? ' cyc-last' : '');
     const badge = i === seg.start ? `<span class="cyc-badge">×${seg.reps}</span>` : '';
-    out += stepRowHtml(i, `cyc${ends}`, badge);
+    rows += stepRowHtml(i, '', badge);
   }
-  return out;
+  return `<div class="cyc-group">${rows}</div>`;
 }
 
 // Collapsed: a cycle run becomes one summary row showing the unit and ×N. The run
