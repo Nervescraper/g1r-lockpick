@@ -314,7 +314,7 @@ function solvePanel(side, boardProps) {
   const steps = plan
     .map(
       (mv, i) =>
-        `<div class="step-line${i === 0 ? ' cur' : ''}"><span>${i + 1} · ${plateLabel(mv.plate)} ${DIR_WORD[mv.dir]}</span><span class="step-arrow">${dirArrow(mv.dir)}</span></div>`
+        `<div class="${i === 0 ? 'cur' : ''}">${i + 1} · ${plateLabel(mv.plate)} <span class="step-arrow">${dirArrow(mv.dir)}</span> ${DIR_WORD[mv.dir]}</div>`
     )
     .join('');
 
