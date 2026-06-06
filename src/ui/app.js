@@ -199,7 +199,7 @@ function positionRows() {
 function setupPanel() {
   const card = document.createElement('div');
   card.className = 'ap-card';
-  const locks = loadLocks(store);
+  const locks = loadLocks(store).filter((l) => l.id !== state.lockId); // exclude the one being worked on
   const lockListHtml = locks.length
     ? `<div class="ap-h" style="margin-top:14px">Saved locks</div><div class="lock-list">${locks
         .map(
