@@ -177,7 +177,7 @@ function railEl() {
   rail.className = 'ap-rail';
   const stages = [['lock', 'Lock'], ['setup', 'Setup'], ['discovery', 'Map the lock'], ['solve', 'Solve']];
   const order = { lock: 0, setup: 1, discovery: 2, solve: 3 };
-  const navigable = { lock: true, setup: true, discovery: !!state.mapping, solve: !!state.mapping };
+  const navigable = { lock: false, setup: true, discovery: !!state.mapping, solve: !!state.mapping };
   for (const [key, label] of stages) {
     const span = document.createElement('span');
     span.textContent = (order[state.stage] > order[key] ? '✓ ' : '') + label;
