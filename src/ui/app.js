@@ -208,6 +208,7 @@ function render() {
   appEl.appendChild(wrap);
   reserveMoveDescHeight();
   alignCycleBraces();
+  positionCycleCounts();
   fitPlanList();
   scrollCurrentStepIntoView();
   persist();
@@ -245,6 +246,25 @@ function alignCycleBraces() {
   }
   const ROW_PAD = 4; // .cyc-rows > div left+right padding
   groups.forEach((g) => { g.style.width = `${Math.ceil(max) + ROW_PAD}px`; });
+}
+
+// Keep each cycle's ×N count on the same line as its highlighted step, so it stays
+// visible when the list auto-scrolls within a tall group (a centered count can land
+// off-screen). Inactive groups fall back to the CSS-default vertical centering.
+function positionCycleCounts() {
+  const list = appEl.querySelector('.ap-steplist');
+  if (!list) return;
+  for (const group of list.querySelectorAll('.cyc-group')) {
+    const count = group.querySelector('.cyc-count');
+    const cur = group.querySelector('.cur');
+    if (cur) {
+      count.style.alignSelf = 'flex-start';
+      count.style.marginTop = `${cur.getBoundingClientRect().top - group.getBoundingClientRect().top}px`;
+    } else {
+      count.style.alignSelf = '';
+      count.style.marginTop = '';
+    }
+  }
 }
 
 // Grow the plan list to fill the leftover viewport height so the page itself
