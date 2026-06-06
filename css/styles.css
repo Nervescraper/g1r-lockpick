@@ -73,8 +73,6 @@ body {
 .tp-plate.probe { box-shadow: 0 0 0 2px var(--gold), 0 16px 0 -1px #1b1c20, 0 26px 22px -6px rgba(0,0,0,.6); }
 .tp-plate.dim { opacity: .5; }
 .tp-plate.selectable { cursor: pointer; }
-.tp-2drow.selectable { cursor: pointer; }
-.tp-2drow.active2d .tp-2dholes { box-shadow: 0 0 0 2px var(--gold), inset 0 1px 0 #6a6e74; }
 .tp-hole {
   position: relative; width: 15px; height: 15px; border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #1f2125, #08090b); box-shadow: inset 0 2px 3px #000;
@@ -103,24 +101,44 @@ body {
 .tp-flatlabel .dot.pin { background: var(--pin); }
 .tp-flatlabel .dot.ok { background: var(--goal); }
 
-/* ---- board: 2D ---- */
-.tp-2drow { display: flex; align-items: center; gap: 10px; margin: 6px 0; justify-content: center; }
-.tp-2dlabel { width: 74px; text-align: right; font-size: 12px; color: #cfcfcf; }
-.tp-2dlabel b { color: var(--gold); }
-.tp-2dholes {
-  position: relative; display: flex; gap: 7px; padding: 6px 9px; border-radius: 5px;
-  background: linear-gradient(180deg, #4a4d52, #2c2e32); border: 1px solid #000; box-shadow: inset 0 1px 0 #6a6e74;
+/* ---- board: 2D — offset slides on a 13-col field ---- */
+.tp-2d {
+  --hole: 15px; --colgap: 4px; --label-w: 56px; --row-gap: 10px;
+  position: relative; max-width: 640px; margin: 0 auto;
 }
-.tp-2dhole {
-  position: relative; width: 16px; height: 16px; border-radius: 50%;
+.tp-2drow { display: flex; align-items: center; gap: var(--row-gap); margin: 6px 0; justify-content: flex-start; }
+.tp-2drow.selectable { cursor: pointer; }
+.tp-2dlabel { width: var(--label-w); text-align: right; font-size: 12px; color: #cfcfcf; }
+.tp-2dlabel b { color: var(--gold); }
+.tp-2dlabel b.done { color: var(--goal); }
+
+/* the 13-column field a slide rides in */
+.tp-field {
+  position: relative; display: grid; column-gap: var(--colgap);
+  grid-template-columns: repeat(13, var(--hole)); align-items: center;
+  height: calc(var(--hole) + 12px);
+}
+/* the sliding plate body behind its 7 holes (placed via grid-column in JS) */
+.tp-tray {
+  grid-row: 1; align-self: stretch; margin: 1px -5px; border-radius: 5px;
+  background: linear-gradient(180deg, #46494e, #2a2c30); border: 1px solid #000;
+  box-shadow: inset 0 1px 0 #62666c;
+}
+.tp-tray.sel  { background: linear-gradient(180deg, #5a4f2e, #352d18); box-shadow: inset 0 1px 0 #8a7a45, 0 0 0 2px var(--gold); }
+.tp-tray.next { box-shadow: inset 0 1px 0 #62666c, 0 0 0 2px var(--gold); }
+/* holes carried by the slide (placed via grid-column in JS) */
+.tp-hole2 {
+  grid-row: 1; z-index: 2; width: var(--hole); height: var(--hole); border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #1f2125, #08090b); box-shadow: inset 0 2px 3px #000;
 }
-.tp-2dhole.goal::after {
-  content: ""; position: absolute; top: -4px; left: -4px; right: -4px; bottom: -4px;
-  border: 1.5px dashed var(--gold); border-radius: 4px;
+.tp-hole2.pin { background: radial-gradient(circle at 40% 35%, #f4d878, #b8862f); box-shadow: 0 0 7px 2px rgba(232,194,90,.6); }
+.tp-hole2.pin.ok { background: radial-gradient(circle at 40% 35%, #9ee6a6, #3e8a4a); }
+/* single dashed keyway box over column 7, spanning all rows */
+.tp-keybox {
+  position: absolute; top: 2px; bottom: 2px; z-index: 4; pointer-events: none;
+  left: calc(var(--label-w) + var(--row-gap) + 6 * (var(--hole) + var(--colgap)) - 4px);
+  width: calc(var(--hole) + 8px); border: 1.5px dashed var(--gold); border-radius: 6px;
 }
-.tp-2dhole.pin { background: radial-gradient(circle at 40% 35%, #f4d878, #b8862f); box-shadow: 0 0 7px 2px rgba(232,194,90,.6); }
-.tp-2dhole.pin.goal { background: radial-gradient(circle at 40% 35%, #9ee6a6, #3e8a4a); }
 
 /* ---- panel cards ---- */
 .ap-card { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 14px 15px; margin-bottom: 12px; }
@@ -199,10 +217,6 @@ body {
 .flash { color: var(--goal); font-size: 12px; margin-left: 8px; }
 
 /* ===== flat board + unified mapping ===== */
-.tp-2d { max-width: 640px; margin: 0 auto; }
-.tp-2d .tp-2drow { justify-content: flex-start; gap: 12px; }
-.tp-2drow.selectable .tp-2dlabel, .tp-2drow.selectable .tp-2dholes { cursor: pointer; }
-.tp-2drow.active2d .tp-2dholes { box-shadow: 0 0 0 2px var(--gold), inset 0 1px 0 #6a6e74; }
 .tp-2dright { margin-left: auto; flex: 0 0 auto; }
 .map-wrap { max-width: 720px; margin: 0 auto; }
 
@@ -212,7 +226,6 @@ body {
 .rel-btn.on-with { background: #1b2e1d; border-color: #2f5c37; color: var(--goal); font-weight: 600; }
 .rel-btn.on-opp { background: #2e1b18; border-color: #5c2f24; color: var(--danger); font-weight: 600; }
 .self-note { font-size: 12px; color: #8a8378; font-style: italic; border: 1px dashed #3a3833; border-radius: 6px; padding: 5px 12px; white-space: nowrap; }
-.tp-2dlabel b.done { color: var(--goal); }
 
 .chip.with { color: var(--goal); border-color: #2f5c37; }
 .chip.opp { color: var(--danger); border-color: #5c2f24; }
