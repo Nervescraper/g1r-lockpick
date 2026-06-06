@@ -86,14 +86,20 @@ probes.
 
 ### 5.2 Recording
 
-- For each plate the player marks **only what they saw move**: **◀ left** (+1) or
-  **▶ right** (−1). Unmarked means "nothing recorded yet" — *not* a confirmed zero.
-- There is deliberately **no "none" state**, because a blocked move can hide a real
-  connection (the plate simply doesn't shake), so a true zero can never be fully confirmed.
-  Unmarked cells are treated as 0 for solving but remain revisable.
-- A probe's outcome is marked **Moved** or **Blocked**.
-- Because the coupling is fixed, any observed shift is **permanently valid**. Observations
-  accumulate across multiple attempts/states until a plate's row is complete.
+- The **active plate is not listed** in the recorder: pressing a plate always moves that
+  plate's own pin by the press direction, so its self-shift is recorded automatically
+  (its coupling diagonal is +1 in the Left frame). The player only marks the **other**
+  plates they saw move.
+- For each other plate the player marks **◀ left** (+1) or **▶ right** (−1), or leaves it
+  unmarked. There is no explicit "none" button: on a successful (**Moved**) probe every
+  side-effect shifts visibly, so unmarked plates are taken as no-connection and the whole
+  row is (re)written on save — which also lets the player **correct a mistake** by
+  re-selecting the plate and un-marking it.
+- A probe's outcome is **Moved** or **Blocked**. A **Blocked** attempt is *not* saved (it
+  reveals nothing and would wrongly imply zeros), so confirmed zeros only ever come from a
+  Moved probe.
+- Re-selecting a plate **restores its recorded marks** so the player can review or fix it.
+  Because the coupling is fixed, a saved row stays valid until deliberately changed.
 
 ### 5.3 Risk-aware sequencing
 

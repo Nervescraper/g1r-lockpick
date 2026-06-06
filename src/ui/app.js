@@ -200,6 +200,24 @@ function safeDefaultDir(plate) {
   return state.positions[plate] > 4 ? 'R' : 'L';
 }
 
+function observedFromCoupling(c, dir) {
+  const v = dir === 'L' ? c : -c;
+  return v === 1 ? 'L' : v === -1 ? 'R' : null;
+}
+
+// Rebuild the recorder marks for a plate from what's already stored, so revisiting a
+// mapped plate shows its connections. The plate's own self-shift is implicit, not listed.
+function recordFromMapping(plate, dir) {
+  const row = state.mapping.coupling[plate];
+  const rec = {};
+  for (let j = 0; j < row.length; j++) {
+    if (j === plate) continue;
+    const s = observedFromCoupling(row[j], dir);
+    if (s) rec[j] = s;
+  }
+  return rec;
+}
+
 // Pick the plate to record by default: the safe-ordered suggestion if any, else the
 // first unmapped plate, else null (everything mapped). The user can override by clicking.
 function suggestDefault() {
@@ -212,6 +230,7 @@ function suggestDefault() {
   if (rec && rec.type === 'probe') next = rec.plate;
   state.activePlate = next;
   state.probeDir = next == null ? 'L' : safeDefaultDir(next);
+  state.record = next == null ? {} : recordFromMapping(next, state.probeDir);
 }
 
 function discoveryPanel(side, boardProps) {
@@ -283,8 +302,10 @@ function discoveryPanel(side, boardProps) {
 }
 
 function movedControls() {
+  const active = state.activePlate;
   const rows = state.positions
     .map((_, j) => {
+      if (j === active) return ''; // the active plate moves itself — not a separate option
       const mark = state.record[j];
       const noMark = mark ? '' : '<span class="nomark">no shift seen</span>';
       return `<div class="rec"><span class="pl">${plateLabel(j)}</span><div class="seg">
@@ -295,7 +316,7 @@ function movedControls() {
     .reverse() // P1 at the bottom, matching the board
     .join('');
   return `
-    <div class="muted" style="margin:6px 0">Mark each plate you saw shift:</div>
+    <div class="muted" style="margin:6px 0">Mark each <i>other</i> plate you saw shift (${plateLabel(active)} moves itself):</div>
     ${rows}
     <div style="margin-top:12px"><span class="ap-btn primary" data-action="save-next">Save ›</span></div>`;
 }
@@ -442,11 +463,21 @@ appEl.addEventListener('click', (e) => {
       const p = +t.dataset.plate;
       state.activePlate = p;
       state.probeDir = safeDefaultDir(p);
-      state.record = {};
+      state.record = recordFromMapping(p, state.probeDir); // restore prior marks
       state.outcome = 'moved';
       break;
     }
-    case 'set-dir': state.probeDir = t.dataset.dir; break;
+    case 'set-dir': {
+      const d = t.dataset.dir;
+      if (d !== state.probeDir) {
+        // pressing the other direction inverts every observed shift
+        const flipped = {};
+        for (const k of Object.keys(state.record)) flipped[k] = state.record[k] === 'L' ? 'R' : 'L';
+        state.record = flipped;
+        state.probeDir = d;
+      }
+      break;
+    }
     case 'outcome': state.outcome = t.dataset.val; break;
     case 'rec-mark': {
       const p = +t.dataset.plate;
@@ -456,10 +487,12 @@ appEl.addEventListener('click', (e) => {
       break;
     }
     case 'save-next': {
-      state.positions = applyProbe(
-        state.positions, state.mapping, state.activePlate, state.probeDir, state.record, { complete: true }
-      );
-      state.record = {};
+      const p = state.activePlate;
+      const dir = state.probeDir;
+      // a Moved probe reveals the whole row at once, so rewrite it (unmarked = no connection)
+      state.mapping.coupling[p] = state.mapping.coupling[p].map(() => 0);
+      const rec = { ...state.record, [p]: dir }; // the active plate always moves itself
+      state.positions = applyProbe(state.positions, state.mapping, p, dir, rec, { complete: true });
       state.outcome = 'moved';
       suggestDefault();
       break;
