@@ -675,8 +675,7 @@ function solvePanel(side, boardProps) {
     card.innerHTML = `<div class="success">✓ Lock open!</div>
       <div class="muted" style="margin-top:6px">Every pin is at the center (4).</div>
       <div class="ap-h" style="margin-top:14px">Save this lock <span class="muted" style="text-transform:none;letter-spacing:0">— name it and it's kept automatically</span></div>
-      ${namingWidgetHtml()}
-      <div style="margin-top:12px"><span class="ap-btn" data-action="new-lock">New lock</span></div>`;
+      ${namingWidgetHtml()}`;
     side.appendChild(card);
     if (state.plan.length) side.appendChild(planCardEl());
     return boardProps;
@@ -772,7 +771,6 @@ appEl.addEventListener('click', (e) => {
       else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.plan = undefined; }
       break;
     }
-    case 'new-lock': state = freshSetup(state.n); break;
     case 'loc-fill': state.location = state.location === t.dataset.loc ? '' : t.dataset.loc; break;
     case 'kind-set': state.kind = t.dataset.kind; break;
     case 'start-over': {
