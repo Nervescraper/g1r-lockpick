@@ -16,6 +16,9 @@ const appEl = document.getElementById('app');
 let state = restore();
 let settings = loadSettings(store);
 const kbdEnabled = () => settings.keyboardShortcuts !== false; // on by default
+// Phones have no physical keyboard, so the shortcuts are useless and their toggle is
+// hidden (see the <=560px CSS breakpoint); treat that narrow viewport as "shortcuts off".
+const isNarrowViewport = () => window.matchMedia('(max-width: 560px)').matches;
 
 function restore() {
   const s = loadSession(store);
@@ -890,7 +893,7 @@ appEl.addEventListener('input', (e) => {
 
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return; // leave Cmd/Ctrl+R etc. for the browser
-  if (!kbdEnabled()) return;
+  if (!kbdEnabled() || isNarrowViewport()) return;
   const tag = (e.target.tagName || '').toUpperCase();
   if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't hijack typing or the toggle
 

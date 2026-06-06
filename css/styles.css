@@ -270,4 +270,6 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
   .rel { flex-direction: column; gap: 5px; width: 100%; }
   .rel-btn { white-space: normal; text-align: center; padding: 6px 8px; }
   .self-note { white-space: normal; }
+  /* no physical keyboard on phones — hide the shortcuts toggle (also disabled in JS) */
+  .ap-footer { display: none; }
 }
