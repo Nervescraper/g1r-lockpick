@@ -191,7 +191,10 @@ up/down. Left = pin position +1, Right = pin position −1.
 - Saved **lock** record: `{ id, name, location, kind (Chest/Door/Other), description, n,
   initial (starting pin positions), coupling (N×N of −1/0/+1), status, notes }`. The display
   `name` is composed as `location · kind · description`.
-- A lock is identified on the Setup screen by **General location** (free text, with
+- **Duplicate guard:** a lock is never saved with the exact same location + type +
+  description (case-insensitive) as another lock. Attempting it shows an inline warning and
+  blocks "Continue" until the details are changed (or the existing lock is loaded instead).
+- A lock is identified on the Lock step by **General location** (free text, with
   quick-fill buttons for Old/New/Swamp/Orc Camp), a **Chest/Door/Other** type, and an
   optional **Description**. Once a location or description is entered the lock **auto-saves**
   (count, initial pins, connections) and appears in the saved-locks list. Loading restores

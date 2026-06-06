@@ -47,9 +47,36 @@ function composeName() {
   return [(state.location || '').trim(), state.kind, (state.description || '').trim()].filter(Boolean).join(' · ') || 'Unnamed lock';
 }
 
-// Once the lock is identifiable (a location or description), keep its saved record current.
+// Another saved lock (not this one) with the same location + type + description.
+function findDuplicate() {
+  const loc = (state.location || '').trim().toLowerCase();
+  const desc = (state.description || '').trim().toLowerCase();
+  return (
+    loadLocks(store).find(
+      (l) =>
+        l.id !== state.lockId &&
+        (l.location || '').trim().toLowerCase() === loc &&
+        (l.kind || 'Chest') === state.kind &&
+        (l.description || '').trim().toLowerCase() === desc
+    ) || null
+  );
+}
+
+function nameWarningHtml() {
+  return state.nameConflict
+    ? `<div class="note" style="border-left-color:var(--danger);margin-top:8px">A lock “${escapeHtml(
+        state.nameConflict
+      )}” already has the same location, type, and description. Load it from the left, or change the details to save a new one.</div>`
+    : '';
+}
+
+// Once the lock is identifiable (a location or description), keep its saved record current —
+// unless it would duplicate an existing lock, in which case refuse and flag a conflict.
 function syncLock() {
-  if (!(state.location || '').trim() && !(state.description || '').trim()) return;
+  if (!(state.location || '').trim() && !(state.description || '').trim()) { state.nameConflict = null; return; }
+  const dup = findDuplicate();
+  if (dup) { state.nameConflict = dup.name; return; }
+  state.nameConflict = null;
   if (!state.lockId) state.lockId = `lock-${Date.now()}`;
   saveLock(store, {
     id: state.lockId,
@@ -228,7 +255,8 @@ function namingWidgetHtml() {
         .join('')}
     </div>
     <div class="muted" style="margin:10px 0 4px">Description (optional)</div>
-    <input class="lock-name-input" type="text" data-action="desc-input" placeholder="e.g. behind the throne" value="${escapeHtml(state.description || '')}" />`;
+    <input class="lock-name-input" type="text" data-action="desc-input" placeholder="e.g. behind the throne" value="${escapeHtml(state.description || '')}" />
+    <div id="name-warning">${nameWarningHtml()}</div>`;
 }
 
 // First step: EITHER load a saved lock (left) OR start a new one (right).
@@ -515,7 +543,12 @@ appEl.addEventListener('click', (e) => {
       suggestDefault();
       break;
     case 'goto-solve': state.stage = 'solve'; state.editing = false; state.plan = undefined; break;
-    case 'new-setup': state.stage = 'setup'; break;
+    case 'new-setup': {
+      const dup = findDuplicate();
+      if (dup) { state.nameConflict = dup.name; break; } // stay on Lock step; warning shows
+      state.stage = 'setup';
+      break;
+    }
     case 'goto-stage': {
       const target = t.dataset.stage;
       if (target === 'lock') state.stage = 'lock';
@@ -579,6 +612,8 @@ appEl.addEventListener('click', (e) => {
         if (!d) break;
         state.description = d;
       }
+      const dup = findDuplicate();
+      if (dup) { flash = `A lock “${dup.name}” with the same details already exists.`; break; }
       syncLock();
       flash = 'Saved.';
       break;
@@ -625,8 +660,12 @@ appEl.addEventListener('click', (e) => {
 
 appEl.addEventListener('input', (e) => {
   // update text fields + autosave without re-rendering (keeps the input focused)
-  if (e.target.closest('[data-action="loc-input"]')) { state.location = e.target.value; persist(); }
-  else if (e.target.closest('[data-action="desc-input"]')) { state.description = e.target.value; persist(); }
+  if (e.target.closest('[data-action="loc-input"]')) state.location = e.target.value;
+  else if (e.target.closest('[data-action="desc-input"]')) state.description = e.target.value;
+  else return;
+  persist(); // runs syncLock, which updates state.nameConflict
+  const w = document.getElementById('name-warning');
+  if (w) w.innerHTML = nameWarningHtml();
 });
 
 window.addEventListener('keydown', (e) => {
