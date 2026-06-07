@@ -158,6 +158,33 @@ test('classifyImport: different id, different identity → fresh', () => {
   assert.equal(fresh.length, 1);
 });
 
+// updatedAt is volatile bookkeeping, not lock content: a same-id record that differs
+// ONLY by its timestamp (or by having/lacking one) is the same lock and must be treated
+// as identical — not a phantom conflict where every visible field matches.
+test('classifyImport: same id, identical but incoming lacks updatedAt → identical', () => {
+  const existing = [fullLock('a', { updatedAt: 1780000000000 })];
+  const inc = [fullLock('a')]; // e.g. an export predating the updatedAt field
+  const { identical, conflicts } = classifyImport(inc, existing);
+  assert.equal(identical.length, 1);
+  assert.equal(conflicts.length, 0);
+});
+
+test('classifyImport: same id, differs only by updatedAt value → identical', () => {
+  const existing = [fullLock('a', { updatedAt: 1780000000000 })];
+  const inc = [fullLock('a', { updatedAt: 1780000099999 })];
+  const { identical, conflicts } = classifyImport(inc, existing);
+  assert.equal(identical.length, 1);
+  assert.equal(conflicts.length, 0);
+});
+
+test('classifyImport: same id, real content differs → still conflict even if updatedAt also differs', () => {
+  const existing = [fullLock('a', { updatedAt: 1780000000000 })];
+  const inc = [fullLock('a', { initial: [1, 1, 1], updatedAt: 1780000099999 })];
+  const { identical, conflicts } = classifyImport(inc, existing);
+  assert.equal(conflicts.length, 1);
+  assert.equal(identical.length, 0);
+});
+
 test('sameIdentity matches on trimmed/lowercased location+type+description', () => {
   const a = { location: 'Old Camp', kind: 'Door', description: 'Behind Throne' };
   const b = { location: ' old camp ', kind: 'Door', description: 'behind throne' };

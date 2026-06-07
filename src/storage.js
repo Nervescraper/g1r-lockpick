@@ -183,8 +183,13 @@ export function sameIdentity(a, b) {
   );
 }
 
+// Compare two records by their meaningful content, ignoring `updatedAt` — a volatile
+// bookkeeping timestamp, not lock data. Without this, re-importing your own list flags
+// every lock as a "conflict" whenever the saved record's timestamp drifts from the file's
+// (or the file predates the field), even though every visible field is unchanged.
 function sameContent(a, b) {
-  return JSON.stringify(a) === JSON.stringify(b);
+  const content = ({ updatedAt, ...rest }) => rest;
+  return JSON.stringify(content(a)) === JSON.stringify(content(b));
 }
 
 // Split incoming locks against the existing collection:
