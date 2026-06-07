@@ -237,3 +237,26 @@ test('classifyImport: identical contents → still identical (skipped)', () => {
   assert.equal(identical.length, 1);
   assert.equal(conflicts.length, 0);
 });
+
+// ---------- updatedAt validation ----------
+
+test('parseImport: accepts a lock with a numeric updatedAt', () => {
+  const env = { format: 'g1r-locks', version: 1, locks: [{ id: 'a', n: 3, updatedAt: 1700000000000 }] };
+  const out = parseImport(JSON.stringify(env));
+  assert.equal(out.locks.length, 1);
+  assert.equal(out.invalidCount, 0);
+});
+
+test('parseImport: accepts a lock with no updatedAt', () => {
+  const env = { format: 'g1r-locks', version: 1, locks: [{ id: 'a', n: 3 }] };
+  const out = parseImport(JSON.stringify(env));
+  assert.equal(out.locks.length, 1);
+  assert.equal(out.invalidCount, 0);
+});
+
+test('parseImport: rejects a lock whose updatedAt is not a number', () => {
+  const env = { format: 'g1r-locks', version: 1, locks: [{ id: 'a', n: 3, updatedAt: 'soon' }] };
+  const out = parseImport(JSON.stringify(env));
+  assert.equal(out.locks.length, 0);
+  assert.equal(out.invalidCount, 1);
+});

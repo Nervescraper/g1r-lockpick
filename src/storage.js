@@ -168,6 +168,7 @@ function isValidLock(l) {
   if (l.status != null) {
     if (!Array.isArray(l.status) || l.status.length !== n) return false;
   }
+  if (l.updatedAt != null && !Number.isFinite(l.updatedAt)) return false;
   return true;
 }
 
