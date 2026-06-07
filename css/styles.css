@@ -277,9 +277,17 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .cyc-brace.left { border-right: 0; border-radius: 3px 0 0 3px; }
 .cyc-brace.right { border-left: 0; border-radius: 0 3px 3px 0; }
 .cyc-count { flex: 0 0 auto; align-self: center; font-size: 11px; font-weight: 700; color: var(--gold); white-space: nowrap; }
-.ap-plan-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ap-plan-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .ap-collapse { font-size: 11px; color: #6b665c; text-transform: none; letter-spacing: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .ap-collapse input { accent-color: var(--gold); cursor: pointer; }
+.ap-plan-h-r { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 7px; flex: 0 0 auto; }
+.ap-fullplan { font-size: 11px; padding: 3px 9px; border-radius: 6px; border: 1px solid #3a3833; background: #221f1b; color: #b9b3a6; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.ap-fullplan:hover { color: #eee; border-color: #555; }
+/* full-plan modal — reuses the .cl-overlay backdrop; the plan list grows to fill it */
+.pm-modal { position: relative; display: flex; flex-direction: column; width: 100%; max-width: 720px; max-height: 84vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px 20px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); }
+.pm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 34px 12px 0; }
+.pm-head h2 { margin: 0; font-size: 16px; letter-spacing: 2px; text-transform: uppercase; color: #f0e2c6; }
+.pm-steplist { flex: 1 1 auto; min-height: 0; max-height: none; font-size: 14px; line-height: 1.95; overscroll-behavior: contain; }
 .cpl-card { display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-bottom: 1px solid #232220; font-size: 12px; }
 .cpl-card:last-child { border-bottom: 0; }
 .cpl-card .mv { width: 86px; color: #cdc; }

@@ -17,6 +17,12 @@ const DIR_WORD = { L: 'Left', R: 'Right' };
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
   {
+    date: '2026-06-07',
+    items: [
+      'Show Full Plan opens the whole plan in a full-screen view — click and keyboard shortcut actions function normally.',
+    ],
+  },
+  {
     date: '2026-06-06',
     items: [
       'Solver now groups moves by plate where it can, so you re-select plates less often — same shortest, edge-free solution.',
@@ -330,8 +336,8 @@ function reserveMoveDescHeight() {
 
 // Align every cycle's closing bracket to one column — the longest step line in
 // the whole plan — by widening each rows column to that max content width.
-function alignCycleBraces() {
-  const list = appEl.querySelector('.ap-steplist');
+function alignCycleBraces(root = appEl) {
+  const list = root.querySelector('.ap-steplist');
   if (!list) return;
   const groups = list.querySelectorAll('.cyc-rows');
   if (!groups.length) return;
@@ -346,8 +352,8 @@ function alignCycleBraces() {
 // Keep each cycle's ×N count on the same line as its highlighted step, so it stays
 // visible when the list auto-scrolls within a tall group (a centered count can land
 // off-screen). Inactive groups fall back to the CSS-default vertical centering.
-function positionCycleCounts() {
-  const list = appEl.querySelector('.ap-steplist');
+function positionCycleCounts(root = appEl) {
+  const list = root.querySelector('.ap-steplist');
   if (!list) return;
   for (const group of list.querySelectorAll('.cyc-group')) {
     const count = group.querySelector('.cyc-count');
@@ -400,8 +406,8 @@ function fitPlanList() {
 // Keep the current plan step one line down from the top of the steplist, so the
 // previous step stays visible for context (the whole app re-renders each action,
 // which would otherwise snap the list back to the top).
-function scrollCurrentStepIntoView() {
-  const list = appEl.querySelector('.ap-steplist');
+function scrollCurrentStepIntoView(root = appEl) {
+  const list = root.querySelector('.ap-steplist');
   if (!list) return;
   const cur = list.querySelector('.cur');
   if (cur) {
@@ -945,18 +951,117 @@ function collapsedSegHtml(seg) {
   return cycleGroupHtml(rows, seg);
 }
 
-function planCardEl() {
+// The plan's step rows, honouring the collapse setting. Shared by the side-panel
+// plan card and the full-screen plan modal so both stay in lockstep.
+function planStepsHtml() {
   const segs = findCycles(state.plan);
-  const collapse = !!settings.collapseCycles;
-  const steps = collapse ? segs.map(collapsedSegHtml).join('') : expandedHtml(segs);
+  return settings.collapseCycles ? segs.map(collapsedSegHtml).join('') : expandedHtml(segs);
+}
+
+// The collapse/expand checkbox, reused in the plan card and the modal. `action`
+// selects which click path handles the toggle (in-app re-render vs. modal rebuild).
+function collapseToggleHtml(action) {
+  return `<label class="ap-collapse"><input type="checkbox" data-action="${action}"${
+    settings.collapseCycles ? ' checked' : ''
+  }> Collapse repeats</label>`;
+}
+
+function planCardEl() {
   const card = document.createElement('div');
   card.className = 'ap-card';
   card.innerHTML = `<div class="ap-h ap-plan-h"><span>Plan · click a step to jump there</span>
-    <label class="ap-collapse"><input type="checkbox" data-action="toggle-collapse"${
-      collapse ? ' checked' : ''
-    }> Collapse repeats</label></div>
-    <div class="ap-steplist">${steps}</div>`;
+    <span class="ap-plan-h-r">
+      <button class="ap-fullplan" data-action="open-fullplan">Show Full Plan</button>
+      ${collapseToggleHtml('toggle-collapse')}
+    </span></div>
+    <div class="ap-steplist">${planStepsHtml()}</div>`;
   return card;
+}
+
+// ---------- full-plan modal ----------
+// A self-contained overlay (like the changelog) that shows the whole plan at screen
+// size. It mirrors the live plan state and the collapse setting; toggling collapse
+// here rebuilds the modal in place, clicking a step jumps there and closes. Every
+// dismissal routes through closePlanModal so the key listener is always cleaned up.
+function planModalHtml() {
+  return `<div class="pm-modal" role="dialog" aria-modal="true" aria-labelledby="pm-title">
+    <button class="cl-close" data-pm="close" aria-label="Close full plan">✕</button>
+    <div class="pm-head">
+      <h2 id="pm-title">Full Plan</h2>
+      ${collapseToggleHtml('toggle-collapse')}
+    </div>
+    <div class="ap-steplist pm-steplist">${planStepsHtml()}</div>`;
+}
+
+function onPlanModalKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); closePlanModal(); }
+}
+
+function closePlanModal() {
+  const ov = document.getElementById('pm-overlay');
+  if (ov) ov.remove();
+  document.removeEventListener('keydown', onPlanModalKey, true);
+  render(); // sync the side panel with any collapse toggle made in the modal
+}
+
+// Rebuild the modal's contents in place (after a collapse toggle) without tearing
+// down the overlay, then realign the brackets for the new layout.
+function refreshPlanModal() {
+  const ov = document.getElementById('pm-overlay');
+  if (!ov) return;
+  ov.innerHTML = planModalHtml();
+  alignCycleBraces(ov);
+  positionCycleCounts(ov);
+  scrollCurrentStepIntoView(ov);
+}
+
+function openPlanModal() {
+  if (!Array.isArray(state.plan) || !state.plan.length) return;
+  if (document.getElementById('pm-overlay')) return; // already open
+  const ov = document.createElement('div');
+  ov.id = 'pm-overlay';
+  ov.className = 'cl-overlay'; // reuse the changelog backdrop styling
+  ov.innerHTML = planModalHtml();
+  ov.addEventListener('click', (e) => {
+    if (e.target === ov || e.target.closest('[data-pm="close"]')) { closePlanModal(); return; }
+    const toggle = e.target.closest('[data-action="toggle-collapse"]');
+    if (toggle) {
+      settings.collapseCycles = !settings.collapseCycles;
+      saveSettings(store, settings);
+      refreshPlanModal();
+      return;
+    }
+    const step = e.target.closest('[data-action="goto-step"]');
+    if (step) {
+      // Jump to the step but keep the modal open — only an explicit dismissal
+      // (backdrop, Close, or Esc) closes it. The underlying view syncs on close.
+      state.planIndex = Math.max(0, Math.min(state.plan.length, +step.dataset.i));
+      state.positions = computeSolvePositions();
+      refreshPlanModal();
+    }
+  });
+  // Keep wheel scrolling over the modal inside it: let the plan list scroll natively
+  // while it has room, but swallow the event at its edges (and over the header/padding)
+  // so it never chains to the page underneath. Wheel over the backdrop falls through,
+  // so the cursor-outside-the-modal case still scrolls the page. Needs passive:false
+  // for preventDefault to take effect.
+  ov.addEventListener('wheel', (e) => {
+    if (!e.target.closest('.pm-modal')) return; // backdrop — let the page scroll
+    const list = e.target.closest('.pm-steplist');
+    if (list && list.scrollHeight > list.clientHeight) {
+      const atTop = list.scrollTop <= 0;
+      const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+      if (!((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom))) return; // native scrolls the list
+    }
+    e.preventDefault(); // at an edge, or over a non-scrolling area: stay in the modal
+  }, { passive: false });
+  document.body.appendChild(ov);
+  // Capture phase so Esc closes the modal before the app's global key handlers see it.
+  document.addEventListener('keydown', onPlanModalKey, true);
+  alignCycleBraces(ov);
+  positionCycleCounts(ov);
+  const close = ov.querySelector('.cl-close');
+  if (close) close.focus();
 }
 
 function solvePanel(side, boardProps) {
@@ -1221,6 +1326,7 @@ appEl.addEventListener('click', (e) => {
     case 'import-done': state.stage = 'lock'; state.import = undefined; break;
     case 'cf-choice': state.import.choices[+t.dataset.i] = t.dataset.choice; break;
     case 'open-changelog': openChangelog(); return; // overlay lives outside the app state/render cycle
+    case 'open-fullplan': openPlanModal(); return; // overlay lives outside the app state/render cycle
     default: return;
   }
   render();
@@ -1265,24 +1371,33 @@ window.addEventListener('keydown', (e) => {
   const tag = (e.target.tagName || '').toUpperCase();
   if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't hijack typing or the toggle
 
-  // R — reset the pins to the lock's starting positions
+  // The full-plan modal stays open while you step through it: the stepping keys move
+  // the current step and refresh the modal in place. Only the backdrop, the Close
+  // button, or Esc (handled by the modal's own capture listener) dismiss it.
+  const planModalOpen = !!document.getElementById('pm-overlay');
+
+  // R — reset the pins to the lock's starting positions and re-solve from the top.
+  // Works while the modal is open too: it just sends the plan back to step 1.
   if (e.key === 'r' || e.key === 'R') {
     if (!state.initial) return;
     state.positions = state.initial.slice();
     if (state.stage === 'solve') state.plan = undefined;
     e.preventDefault();
-    render();
+    render(); // recomputes the plan from the reset positions
+    if (planModalOpen) refreshPlanModal();
     return;
   }
 
   // Setup / Edit-positions — digits set the active plate's pin; arrows move the cursor.
-  if (isPositionEditing()) {
+  if (!planModalOpen && isPositionEditing()) {
     if (handlePositionKey(e.key)) { e.preventDefault(); render(); }
     return; // these contexts consume no plan-stepping keys
   }
 
   // Step through the plan while solving. Advance: Enter / Space / ↓ / →. Back: ↑ / ←.
-  if (state.stage !== 'solve' || state.editing || !Array.isArray(state.plan)) return;
+  // The modal only opens mid-solve with a plan, so it's safe to step while it's open.
+  if (!planModalOpen && (state.stage !== 'solve' || state.editing)) return;
+  if (!Array.isArray(state.plan)) return;
   const advance = ['Enter', ' ', 'Spacebar', 'ArrowDown', 'ArrowRight'].includes(e.key);
   const back = ['ArrowUp', 'ArrowLeft', 'Backspace'].includes(e.key);
   if (!advance && !back) return;
@@ -1291,7 +1406,7 @@ window.addEventListener('keydown', (e) => {
   else if (back && state.planIndex > 0) state.planIndex--;
   else return; // already at an end — nothing changes
   state.positions = computeSolvePositions();
-  render();
+  if (planModalOpen) refreshPlanModal(); else render();
 });
 
 // Read a chosen backup file into the import state, then re-render to show its name.
