@@ -114,6 +114,13 @@ function nameWarningHtml() {
     : '';
 }
 
+// In-app saves always bump updatedAt to now, so re-saving moves a lock to the top of
+// Recent. Imports use preserve() instead — see below.
+const stamp = (lock) => ({ ...lock, updatedAt: Date.now() });
+// Imports keep the lock's own updatedAt (its real prior save time), stamping now only
+// when it's missing — so an imported lock lands in Recent by when it was actually saved.
+const preserve = (lock) => ({ ...lock, updatedAt: lock.updatedAt ?? Date.now() });
+
 // Once the lock is identifiable (a location or description), keep its saved record current —
 // unless it would duplicate an existing lock, in which case refuse and flag a conflict.
 function syncLock() {
@@ -122,7 +129,7 @@ function syncLock() {
   if (dup) { state.nameConflict = dup.name; return; }
   state.nameConflict = null;
   if (!state.lockId) state.lockId = `lock-${Date.now()}`;
-  saveLock(store, {
+  saveLock(store, stamp({
     id: state.lockId,
     name: composeName(),
     location: (state.location || '').trim(),
@@ -136,7 +143,7 @@ function syncLock() {
     // never carry an in-progress blank row — while state.contents keeps what's on screen.
     contents: sanitizeContents(state.contents),
     notes: '',
-  });
+  }));
 }
 
 // ---------- helpers ----------
@@ -505,7 +512,7 @@ function activeContents() {
 function persistContents() {
   if (state.stage === 'contents') {
     const base = getLock(store, state.contentsEdit.id);
-    if (base) saveLock(store, { ...base, contents: sanitizeContents(state.contentsEdit.items) });
+    if (base) saveLock(store, stamp({ ...base, contents: sanitizeContents(state.contentsEdit.items) }));
   } else {
     persist(); // syncLock writes sanitizeContents(state.contents) to the session lock
   }
@@ -717,7 +724,7 @@ function runImportParse() {
   const existing = loadLocks(store);
   const { fresh, identical, conflicts } = classifyImport(parsed.locks, existing);
   let newCount = 0;
-  for (const l of fresh) { saveLock(store, l); newCount++; }
+  for (const l of fresh) { saveLock(store, preserve(l)); newCount++; }
   state.import = {
     phase: 'results',
     newCount,
@@ -736,7 +743,7 @@ function runImportApply() {
   let added = 0;
   imp.conflicts.forEach((c, i) => {
     if (imp.choices[i] === 'copy') {
-      saveLock(store, { ...c.incoming, id: `lock-${Date.now()}-${i}` });
+      saveLock(store, preserve({ ...c.incoming, id: `lock-${Date.now()}-${i}` }));
       added++;
     }
   });
