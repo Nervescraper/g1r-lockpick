@@ -60,3 +60,29 @@ export function findCycles(plan) {
   }
   return segs;
 }
+
+// Row/group layout for the EXPANDED plan view (every move shown). Returns an ordered
+// list of items: { kind: 'row', index } or { kind: 'group', seg, indices: [...] }.
+//
+// A cycle whose unit is a single move (unitLen 1 — e.g. the grouped runs the solver
+// emits, "P1← P1← P1←") is flattened to plain rows: each repetition is already its
+// own row, so wrapping them in a ×N bracket would read as N×N. Only a cycle with a
+// multi-move repeating unit is shown as a bracketed group. (The collapsed view keeps
+// the ×N bracket for runs, where the unit is shown only once.)
+export function expandedLayout(segs) {
+  const items = [];
+  for (const seg of segs) {
+    if (seg.type === 'single') {
+      items.push({ kind: 'row', index: seg.index });
+      continue;
+    }
+    const indices = [];
+    for (let i = seg.start; i < seg.start + seg.length; i++) indices.push(i);
+    if (seg.unitLen === 1) {
+      for (const index of indices) items.push({ kind: 'row', index });
+    } else {
+      items.push({ kind: 'group', seg, indices });
+    }
+  }
+  return items;
+}

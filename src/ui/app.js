@@ -2,7 +2,7 @@ import { createBoard } from './board.js';
 import { nextActivePlate } from './active-plate.js';
 import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
 import { solve } from '../solver.js';
-import { findCycles } from '../cycles.js';
+import { findCycles, expandedLayout } from '../cycles.js';
 import { createMapping, recommendNext, allMapped } from '../discovery.js';
 import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
@@ -913,12 +913,17 @@ function cycleGroupHtml(rows, seg) {
   )}</span></div>`;
 }
 
-// Expanded: list every move of the run.
-function expandedSegHtml(seg) {
-  if (seg.type === 'single') return stepRowHtml(seg.index);
-  let rows = '';
-  for (let i = seg.start; i < seg.start + seg.length; i++) rows += stepRowHtml(i);
-  return cycleGroupHtml(rows, seg);
+// Expanded: every move is its own row. Single-move runs render as plain rows (a ×N
+// bracket would read as N×N since each repetition is already shown); only multi-move
+// repeating units are bracketed. See expandedLayout in cycles.js.
+function expandedHtml(segs) {
+  return expandedLayout(segs)
+    .map((item) =>
+      item.kind === 'row'
+        ? stepRowHtml(item.index)
+        : cycleGroupHtml(item.indices.map(stepRowHtml).join(''), item.seg)
+    )
+    .join('');
 }
 
 // Collapsed: same bracket group, but the unit's steps show only once. The step
@@ -944,7 +949,7 @@ function collapsedSegHtml(seg) {
 function planCardEl() {
   const segs = findCycles(state.plan);
   const collapse = !!settings.collapseCycles;
-  const steps = segs.map(collapse ? collapsedSegHtml : expandedSegHtml).join('');
+  const steps = collapse ? segs.map(collapsedSegHtml).join('') : expandedHtml(segs);
   const card = document.createElement('div');
   card.className = 'ap-card';
   card.innerHTML = `<div class="ap-h ap-plan-h"><span>Plan · click a step to jump there</span>

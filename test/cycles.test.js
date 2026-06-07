@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findCycles } from '../src/cycles.js';
+import { findCycles, expandedLayout } from '../src/cycles.js';
 
 // Build a plan from a compact "P<dir>" shorthand, e.g. "1L 2R 1L".
 function plan(s) {
@@ -83,4 +83,65 @@ test('tie-break prefers the smallest unit: ABABAB is AB x3, not ABAB', () => {
   const segs = findCycles(plan('1L 2R 1L 2R 1L 2R'));
   assert.equal(segs[0].unitLen, 2);
   assert.equal(segs[0].reps, 3);
+});
+
+// expandedLayout: the row/group structure of the EXPANDED plan view. A single-move
+// run (unitLen 1) must NOT be wrapped in a ×N bracket — every repetition is already
+// its own row, so a bracket would read as N×N. Only a multi-move repeating unit is
+// bracketed.
+
+test('expandedLayout: a single-move run renders as plain rows, no group', () => {
+  // What the switch-minimizing solver produces: grouped identical moves.
+  const segs = findCycles(plan('1L 1L 1L 2L 2L'));
+  const items = expandedLayout(segs);
+  assert.deepEqual(
+    items,
+    [
+      { kind: 'row', index: 0 },
+      { kind: 'row', index: 1 },
+      { kind: 'row', index: 2 },
+      { kind: 'row', index: 3 },
+      { kind: 'row', index: 4 },
+    ],
+    'no bracketed group for single-move runs',
+  );
+});
+
+test('expandedLayout: one row per plan move, in order', () => {
+  const segs = findCycles(plan('1L 1L 1L 2L 2L 3R 3R 3R'));
+  const items = expandedLayout(segs);
+  assert.equal(items.length, 8);
+  assert.deepEqual(items.map((it) => it.index), [0, 1, 2, 3, 4, 5, 6, 7]);
+  assert.ok(items.every((it) => it.kind === 'row'));
+});
+
+test('expandedLayout: a genuine multi-move repeating unit IS bracketed', () => {
+  const segs = findCycles(plan('1L 2R 1L 2R 1L 2R'));
+  const items = expandedLayout(segs);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, 'group');
+  assert.equal(items[0].seg.unitLen, 2);
+  assert.deepEqual(items[0].indices, [0, 1, 2, 3, 4, 5]);
+});
+
+test('expandedLayout: singles pass through as rows', () => {
+  const segs = findCycles(plan('1L 2R 3L'));
+  const items = expandedLayout(segs);
+  assert.deepEqual(items, [
+    { kind: 'row', index: 0 },
+    { kind: 'row', index: 1 },
+    { kind: 'row', index: 2 },
+  ]);
+});
+
+test('expandedLayout: mix of a single-move run then a multi-move cycle', () => {
+  // "1L 1L" (run) then "2L 3R 2L 3R" (AB x2)
+  const segs = findCycles(plan('1L 1L 2L 3R 2L 3R'));
+  const items = expandedLayout(segs);
+  // run -> 2 plain rows; cycle -> 1 group covering indices 2..5
+  assert.equal(items.length, 3);
+  assert.deepEqual(items[0], { kind: 'row', index: 0 });
+  assert.deepEqual(items[1], { kind: 'row', index: 1 });
+  assert.equal(items[2].kind, 'group');
+  assert.deepEqual(items[2].indices, [2, 3, 4, 5]);
 });
