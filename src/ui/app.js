@@ -8,6 +8,7 @@ import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
   exportLocks, encodeShare, parseImport, classifyImport, sameIdentity, sanitizeContents,
 } from '../storage.js';
+import { groupLocks } from '../locks-view.js';
 
 const store = window.localStorage;
 const N_MIN = 3;
@@ -574,7 +575,7 @@ function lockStep() {
   left.innerHTML = `<div class="ap-card">
     <div class="ap-h">Load a saved lock</div>
     ${locks.length
-      ? `<div class="lock-list">${locks.map(lockRowHtml).join('')}</div>`
+      ? lockSectionsHtml(locks)
       : '<div class="muted">No saved locks yet — start a new one on the right →</div>'}
     <div class="lock-io">
       ${allLocks.length ? '<span class="ap-btn" data-action="export-all">⬆ Export all</span>' : ''}
@@ -595,6 +596,41 @@ function lockStep() {
   main.appendChild(right);
   holder.appendChild(main);
   return holder;
+}
+
+const RECENT_KEY = '__recent__';
+
+// Is a section open? Recent defaults open, every folder defaults closed; only explicit
+// user overrides are stored in settings.lockFolders.
+function sectionOpen(key) {
+  const overrides = settings.lockFolders || {};
+  if (key in overrides) return overrides[key];
+  return key === RECENT_KEY;
+}
+
+// One collapsible section: clickable header (caret + label + count) and, when open, the
+// stack of lock rows. Reuses lockRowHtml unchanged.
+function lockSectionHtml(key, label, locks) {
+  const open = sectionOpen(key);
+  const caret = open ? '▼' : '▸';
+  const body = open ? `<div class="lock-list">${locks.map(lockRowHtml).join('')}</div>` : '';
+  return `<div class="lock-folder">
+    <div class="lock-folder-h" data-action="toggle-folder" data-folder="${escapeHtml(key)}">
+      <span class="lf-caret">${caret}</span>
+      <span class="lf-label">${escapeHtml(label)}</span>
+      <span class="lf-count">${locks.length}</span>
+    </div>
+    ${body}
+  </div>`;
+}
+
+// The full sectioned list: Recent (when non-empty) followed by one section per folder.
+function lockSectionsHtml(locks) {
+  const { recent, folders } = groupLocks(locks);
+  const parts = [];
+  if (recent.length) parts.push(lockSectionHtml(RECENT_KEY, 'Recent', recent));
+  for (const f of folders) parts.push(lockSectionHtml(f.key, f.label, f.locks));
+  return parts.join('');
 }
 
 // One saved-lock row: load (name) · share · delete, with an inline share-code panel
@@ -1302,6 +1338,13 @@ appEl.addEventListener('click', (e) => {
       settings.collapseCycles = !settings.collapseCycles;
       saveSettings(store, settings);
       break;
+    case 'toggle-folder': {
+      const key = t.dataset.folder;
+      const overrides = settings.lockFolders || (settings.lockFolders = {});
+      overrides[key] = !sectionOpen(key);
+      saveSettings(store, settings);
+      break;
+    }
     case 'del-lock': {
       const id = t.dataset.id;
       const lock = getLock(store, id);
