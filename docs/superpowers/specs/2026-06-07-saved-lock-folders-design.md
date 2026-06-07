@@ -33,16 +33,18 @@ expand/collapse sections instead of one flat list:
 Add an optional `updatedAt` field (epoch milliseconds, a number) to lock records,
 stamped on **every** save.
 
-- There are four `saveLock` call sites in `app.js`: autosave (`syncLock`), contents
-  edit, import-fresh, and import-conflict ("keep both"). All four funnel through one
-  helper so stamping can't drift:
+- There are four `saveLock` call sites in `app.js`. They split by intent:
+  - **In-app saves** — autosave (`syncLock`) and contents edit (`persistContents`) —
+    must **always overwrite** `updatedAt` with the current time, so re-saving an
+    existing lock moves it to the top of Recent. Both funnel through one helper so the
+    behavior can't drift:
 
-  ```js
-  const stamp = (lock) => ({ ...lock, updatedAt: Date.now() });
-  ```
-
-- Imported locks **keep their existing `updatedAt`** when present (it reflects when
-  they were really saved); if absent, they are stamped at import time.
+    ```js
+    const stamp = (lock) => ({ ...lock, updatedAt: Date.now() });
+    ```
+  - **Imports** — import-fresh and import-conflict ("keep both") — must **preserve** an
+    existing `updatedAt` (it reflects when the lock was really saved), stamping only
+    when absent: `{ ...l, updatedAt: l.updatedAt ?? Date.now() }`.
 - `isValidLock` in `storage.js` gains an optional check: if `updatedAt` is present it
   must be a finite number; absent is valid. Records predating this change sort last in
   Recent until their next save bumps them.
