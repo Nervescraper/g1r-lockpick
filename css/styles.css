@@ -209,6 +209,32 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .lock-contents { display: none; padding: 1px 9px 2px; font-size: 12px; }
 .lock-row:hover .lock-contents { display: block; }
 
+/* ---- saved-lock folder headers ---- */
+.lock-folder { margin-bottom: 6px; }
+
+.lock-folder-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+}
+.lock-folder-h:hover { background: rgba(255, 255, 255, 0.05); }
+
+.lf-caret { width: 1em; color: #8a8378; font-size: 0.85em; }
+.lf-label { font-weight: 600; }
+.lf-count {
+  margin-left: auto;
+  color: #8a8378;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inset the rows so they read as belonging to the folder above them. */
+.lock-folder .lock-list { margin-left: 10px; }
+
 /* ---- contents (loot) editor ---- */
 .contents-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .ct-row { display: flex; align-items: center; gap: 6px; }
