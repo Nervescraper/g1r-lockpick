@@ -21,6 +21,7 @@ const CHANGELOG = [
     date: '2026-06-07',
     items: [
       'Show Full Plan opens the whole plan in a full-screen view — click and keyboard shortcut actions function normally.',
+      'Edit a saved lock’s name (location, type, description) alongside its contents from the ✎ editor.',
     ],
   },
   {
@@ -97,20 +98,26 @@ function discardPendingEdit() {
   state.editBackup = undefined;
 }
 
-function composeName() {
-  return [(state.location || '').trim(), state.kind, (state.description || '').trim()].filter(Boolean).join(' · ') || 'Unnamed lock';
+// Compose a display name from a holder's location/type/description. Defaults to the session
+// lock (state); the saved-lock editor passes its own buffer (state.contentsEdit).
+function composeName(src = state) {
+  return [(src.location || '').trim(), src.kind, (src.description || '').trim()].filter(Boolean).join(' · ') || 'Unnamed lock';
 }
 
-// Another saved lock (not this one) with the same location + type + description.
-function findDuplicate() {
-  const me = { location: state.location, kind: state.kind, description: state.description };
-  return loadLocks(store).find((l) => l.id !== state.lockId && sameIdentity(l, me)) || null;
+// Another saved lock (not this one) with the same location + type + description. Defaults to
+// the session lock; the editor passes its own buffer + the id of the lock being edited.
+function findDuplicate(src = state, id = state.lockId) {
+  const me = { location: src.location, kind: src.kind, description: src.description };
+  return loadLocks(store).find((l) => l.id !== id && sameIdentity(l, me)) || null;
 }
 
 function nameWarningHtml() {
-  return state.nameConflict
+  const conflict = state.stage === 'contents'
+    ? state.contentsEdit && state.contentsEdit.nameConflict
+    : state.nameConflict;
+  return conflict
     ? `<div class="note" style="border-left-color:var(--danger);margin-top:8px">A lock “${escapeHtml(
-        state.nameConflict
+        conflict
       )}” already has the same location, type, and description. Load it from the left, or change the details to save a new one.</div>`
     : '';
 }
@@ -480,24 +487,26 @@ function handlePositionKey(key) {
   return false;
 }
 
-// The location/type/description fields, reused on the Lock step.
+// The location/type/description fields, reused on the Lock step and the saved-lock editor.
+// Reads from activeName() so the same widget drives whichever holder the current screen edits.
 function namingWidgetHtml() {
+  const nm = activeName();
   return `
     <div class="muted" style="margin-bottom:4px">General location</div>
     <div class="fill-row">
       ${['Old Camp', 'New Camp', 'Swamp Camp', 'Orc Camp']
-        .map((loc) => `<button class="ap-btn loc-fill${state.location === loc ? ' primary' : ''}" data-action="loc-fill" data-loc="${loc}">${loc}</button>`)
+        .map((loc) => `<button class="ap-btn loc-fill${nm.location === loc ? ' primary' : ''}" data-action="loc-fill" data-loc="${loc}">${loc}</button>`)
         .join('')}
     </div>
-    <input class="lock-name-input" type="text" data-action="loc-input" placeholder="General location…" value="${escapeHtml(state.location || '')}" />
+    <input class="lock-name-input" type="text" data-action="loc-input" placeholder="General location…" value="${escapeHtml(nm.location || '')}" />
     <div class="muted" style="margin:10px 0 4px">Type</div>
     <div class="kind-row">
       ${['Chest', 'Door', 'Other']
-        .map((k) => `<label class="kind-opt" data-action="kind-set" data-kind="${k}"><input type="radio" name="kind" ${state.kind === k ? 'checked' : ''}/> ${k}</label>`)
+        .map((k) => `<label class="kind-opt" data-action="kind-set" data-kind="${k}"><input type="radio" name="kind" ${nm.kind === k ? 'checked' : ''}/> ${k}</label>`)
         .join('')}
     </div>
     <div class="muted" style="margin:10px 0 4px">Description (optional)</div>
-    <input class="lock-name-input" type="text" data-action="desc-input" placeholder="e.g. behind the throne" value="${escapeHtml(state.description || '')}" />
+    <input class="lock-name-input" type="text" data-action="desc-input" placeholder="e.g. behind the throne" value="${escapeHtml(nm.description || '')}" />
     <div id="name-warning">${nameWarningHtml()}</div>`;
 }
 
@@ -506,6 +515,42 @@ function namingWidgetHtml() {
 // returns whichever array the current screen is editing so the row handlers stay shared.
 function activeContents() {
   return state.stage === 'contents' ? state.contentsEdit.items : state.contents;
+}
+
+// The name fields (location/kind/description) live on the session lock (state) when creating,
+// and on the editor's buffer (state.contentsEdit) when editing a saved lock. Both holders carry
+// the same three keys so the naming widget and its handlers stay shared across screens.
+function activeName() {
+  return state.stage === 'contents' ? state.contentsEdit : state;
+}
+
+// Write the edited name back to its saved lock record, recomputing the display name and refusing
+// a change that would duplicate another lock's identity — mirroring syncLock for the session lock.
+function persistName() {
+  if (state.stage !== 'contents') { persist(); return; } // session lock: syncLock handles it
+  const ed = state.contentsEdit;
+  const base = getLock(store, ed.id);
+  if (!base) return;
+  // An empty identity (no location and no description) can't name a lock — keep the prior record,
+  // same as the creation flow, rather than saving an "Unnamed lock".
+  if (!(ed.location || '').trim() && !(ed.description || '').trim()) { ed.nameConflict = null; return; }
+  const dup = findDuplicate(ed, ed.id);
+  ed.nameConflict = dup ? dup.name : null;
+  if (dup) return;
+  saveLock(store, stamp({
+    ...base,
+    location: (ed.location || '').trim(),
+    kind: ed.kind,
+    description: (ed.description || '').trim(),
+    name: composeName(ed),
+  }));
+  // If the edited lock is also the one loaded in the session, keep state in sync so going back
+  // doesn't show stale name fields in the working column.
+  if (state.lockId === ed.id) {
+    state.location = ed.location;
+    state.kind = ed.kind;
+    state.description = ed.description;
+  }
 }
 
 // Write the edited contents back to its lock record, cleaned. The on-screen buffer keeps
@@ -541,16 +586,17 @@ function contentsSummary(l) {
   return items.map((c) => `${c.qty}× ${escapeHtml(String(c.item).trim())}`).join(' · ');
 }
 
-// The dedicated editor for a saved lock's contents, reached by the ✎ icon in its row.
+// The dedicated editor for a saved lock, reached by the ✎ icon in its row. Edits both the
+// name (location/type/description) and the contents (loot) of the saved record.
 function contentsView() {
   const ed = state.contentsEdit;
-  const lock = ed ? getLock(store, ed.id) : null;
   const col = document.createElement('div');
   col.className = 'lock-col import-col';
   const card = document.createElement('div');
   card.className = 'ap-card';
-  card.innerHTML = `<div class="ap-h">Contents</div>
-    <div class="muted" style="margin-bottom:10px">${escapeHtml(lock ? lock.name : 'Lock')}</div>
+  card.innerHTML = `<div class="ap-h">Edit lock</div>
+    ${namingWidgetHtml()}
+    <div class="muted" style="margin:16px 0 4px">Contents</div>
     ${contentsEditorHtml(ed.items)}
     <div style="margin-top:14px"><span class="ap-btn primary" data-action="contents-done">‹ Back to locks</span></div>`;
   col.appendChild(card);
@@ -1243,8 +1289,16 @@ appEl.addEventListener('click', (e) => {
       else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.plan = undefined; }
       break;
     }
-    case 'loc-fill': state.location = state.location === t.dataset.loc ? '' : t.dataset.loc; break;
-    case 'kind-set': state.kind = t.dataset.kind; break;
+    case 'loc-fill': {
+      const nm = activeName();
+      nm.location = nm.location === t.dataset.loc ? '' : t.dataset.loc;
+      if (state.stage === 'contents') persistName(); // editor autosaves on select; create flow saves on input
+      break;
+    }
+    case 'kind-set':
+      activeName().kind = t.dataset.kind;
+      if (state.stage === 'contents') persistName();
+      break;
     case 'start-over': {
       // Only confirm when there's unrecoverable work: a mapping that isn't saved (an unnamed
       // lock lives only in the session, so Start over would lose it). Named locks are kept.
@@ -1364,7 +1418,14 @@ appEl.addEventListener('click', (e) => {
       const lock = getLock(store, t.dataset.id);
       if (lock) {
         state.stage = 'contents';
-        state.contentsEdit = { id: lock.id, items: (Array.isArray(lock.contents) ? lock.contents : []).map((c) => ({ ...c })) };
+        state.contentsEdit = {
+          id: lock.id,
+          items: (Array.isArray(lock.contents) ? lock.contents : []).map((c) => ({ ...c })),
+          location: lock.location || '',
+          kind: lock.kind || 'Chest',
+          description: lock.description || '',
+          nameConflict: null,
+        };
       }
       break;
     }
@@ -1406,10 +1467,10 @@ appEl.addEventListener('input', (e) => {
     return;
   }
   // update text fields + autosave without re-rendering (keeps the input focused)
-  if (e.target.closest('[data-action="loc-input"]')) state.location = e.target.value;
-  else if (e.target.closest('[data-action="desc-input"]')) state.description = e.target.value;
+  if (e.target.closest('[data-action="loc-input"]')) activeName().location = e.target.value;
+  else if (e.target.closest('[data-action="desc-input"]')) activeName().description = e.target.value;
   else return;
-  persist(); // runs syncLock, which updates state.nameConflict
+  persistName(); // syncLock (create) or saveLock (editor); refreshes the active nameConflict
   const w = document.getElementById('name-warning');
   if (w) w.innerHTML = nameWarningHtml();
 });
