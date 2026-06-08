@@ -356,6 +356,12 @@ function render() {
   positionCycleCounts();
   fitPlanList();
   scrollCurrentStepIntoView();
+  // One-shot: focus the item textbox of a freshly added contents row.
+  if (state.focusContentItem != null) {
+    const el = appEl.querySelector(`[data-action="content-item"][data-i="${state.focusContentItem}"]`);
+    state.focusContentItem = undefined;
+    if (el) el.focus();
+  }
   persist();
 }
 
@@ -1532,7 +1538,7 @@ appEl.addEventListener('click', (e) => {
     case 'share-lock': state.shareId = state.shareId === t.dataset.id ? undefined : t.dataset.id; break;
     case 'close-share': state.shareId = undefined; break;
     case 'copy-share': copyShareCode(t); return;
-    case 'content-add': activeContents().push({ item: '', qty: 1 }); persistContents(); break;
+    case 'content-add': { const arr = activeContents(); arr.push({ item: '', qty: 1 }); state.focusContentItem = arr.length - 1; persistContents(); break; }
     case 'content-del': activeContents().splice(+t.dataset.i, 1); persistContents(); break;
     case 'edit-contents': {
       const lock = getLock(store, t.dataset.id);
