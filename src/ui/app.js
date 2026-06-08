@@ -10,11 +10,17 @@ import {
   exportLocks, encodeShare, parseImport, classifyImport, sameIdentity, sanitizeContents,
 } from '../storage.js';
 import { groupLocks } from '../locks-view.js';
+import { shouldShowBadge } from './changelog-badge.js';
 
 const store = window.localStorage;
 const N_MIN = 3;
 const N_MAX = 8;
 const DIR_WORD = { L: 'Left', R: 'Right' };
+
+// Bump when a changelog update should re-show the "New" badge on the Changelog
+// button. Leave unchanged for silent edits (typos, rewording) that shouldn't
+// re-notify users who've already seen the latest entries.
+const CHANGELOG_VERSION = '1.0.0';
 
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
@@ -244,6 +250,13 @@ function closeChangelog() {
 
 function openChangelog() {
   if (document.getElementById('cl-overlay')) return; // already open
+  // Mark the latest changelog as seen and clear the "New" badge immediately.
+  if (settings.lastSeenChangelogVersion !== CHANGELOG_VERSION) {
+    settings.lastSeenChangelogVersion = CHANGELOG_VERSION;
+    saveSettings(store, settings);
+    const badge = document.querySelector('.ap-changelog .ap-badge-new');
+    if (badge) badge.remove();
+  }
   const ov = document.createElement('div');
   ov.id = 'cl-overlay';
   ov.className = 'cl-overlay';
@@ -278,6 +291,12 @@ function render() {
   clog.className = 'ap-changelog';
   clog.dataset.action = 'open-changelog';
   clog.textContent = 'Changelog';
+  if (shouldShowBadge(CHANGELOG_VERSION, settings.lastSeenChangelogVersion)) {
+    const badge = document.createElement('span');
+    badge.className = 'ap-badge-new';
+    badge.textContent = 'New';
+    clog.appendChild(badge);
+  }
   bar.appendChild(clog);
   wrap.appendChild(bar);
 

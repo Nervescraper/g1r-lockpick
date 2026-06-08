@@ -20,14 +20,14 @@ In `src/ui/app.js`, alongside the existing `CHANGELOG` array, add one constant:
 ```javascript
 // Bump when a changelog update should re-show the "New" badge.
 // Leave unchanged for silent edits (typos, rewording).
-const CHANGELOG_VERSION = '1.3.0';
+const CHANGELOG_VERSION = '1.0.0';
 ```
 
 The `CHANGELOG` array is unchanged — entries stay keyed by `date` for display.
 
-Existing entries map to versions for reference only (not stored): 2026-06-05 =
-1.0.0, 2026-06-06 = 1.1.0, 2026-06-07 = 1.2.0, 2026-06-08 = 1.3.0. `package.json`
-stays independent of this constant.
+The constant starts at `1.0.0` (the current set of entries is the baseline);
+bump it when a future changelog update should re-badge. `package.json` stays
+independent of this constant.
 
 ### Pure helper — `src/ui/changelog-badge.js`
 

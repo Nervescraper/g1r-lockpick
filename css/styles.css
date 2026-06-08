@@ -45,6 +45,8 @@ body {
 /* Mirror of .ap-reset, pinned to the left edge of the bar at the same height. */
 .ap-changelog { position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 4px 11px; border-radius: 6px; border: 1px solid #3a3833; background: #221f1b; color: #b9b3a6; cursor: pointer; }
 .ap-changelog:hover { color: #eee; border-color: #555; }
+/* "New" pill on the Changelog button when there are unseen changelog entries. */
+.ap-badge-new { margin-left: 6px; padding: 1px 5px; border-radius: 7px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; background: var(--shr); color: #1a1916; vertical-align: 1px; }
 
 /* ---- changelog modal ---- */
 .cl-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px 16px; background: rgba(8, 7, 5, 0.66); overflow-y: auto; }
