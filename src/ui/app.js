@@ -20,6 +20,7 @@ const CHANGELOG = [
   {
     date: '2026-06-07',
     items: [
+      'Saved locks now group into collapsible folders by location, with your most recent locks kept at the top.',
       'Show Full Plan opens the whole plan in a full-screen view — click and keyboard shortcut actions function normally.',
       'Edit a saved lock’s name (location, type, description) alongside its contents from the ✎ editor.',
     ],
