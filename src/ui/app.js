@@ -2,7 +2,7 @@ import { createBoard } from './board.js';
 import { nextActivePlate } from './active-plate.js';
 import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
 import { solve } from '../solver.js';
-import { findCycles, expandedLayout } from '../cycles.js';
+import { findCycles, expandedLayout, nextSectionStart, prevSectionStart } from '../cycles.js';
 import { planColumnCount } from './plan-columns.js';
 import { createMapping, recommendNext, allMapped } from '../discovery.js';
 import {
@@ -20,7 +20,7 @@ const DIR_WORD = { L: 'Left', R: 'Right' };
 // Bump when a changelog update should re-show the "New" badge on the Changelog
 // button. Leave unchanged for silent edits (typos, rewording) that shouldn't
 // re-notify users who've already seen the latest entries.
-const CHANGELOG_VERSION = '1.0.0';
+const CHANGELOG_VERSION = '1.1.0';
 
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
@@ -29,6 +29,7 @@ const CHANGELOG = [
     items: [
       'The Full Plan view now spreads across multiple columns on wide, short screens, so more of it fits without scrolling.',
       'Press Z while solving to open or close the Full Plan view.',
+      'With collapsed cycles on, press N or P to skip a whole grouped section forward or back at once instead of stepping through every repeat.',
     ],
   },
   {
@@ -346,7 +347,7 @@ function render() {
   footer.className = 'ap-footer';
   footer.innerHTML = `<label class="ap-kbd">
       <input type="checkbox" data-action="toggle-kbd"${kbdEnabled() ? ' checked' : ''}>
-      <span class="ap-kbd-tip" data-tip="Advance:  Enter · Space · ↓ · →&#10;Back:  ↑ · ← · Backspace&#10;Reset pins:  R&#10;Full plan:  Z">Keyboard shortcuts</span></label>`;
+      <span class="ap-kbd-tip" data-tip="Advance:  Enter · Space · ↓ · →&#10;Back:  ↑ · ← · Backspace&#10;Next / prev section:  N · P (collapsed view)&#10;Reset pins:  R&#10;Full plan:  Z">Keyboard shortcuts</span></label>`;
   wrap.appendChild(footer);
 
   appEl.appendChild(wrap);
@@ -1642,6 +1643,27 @@ window.addEventListener('keydown', (e) => {
   // The modal only opens mid-solve with a plan, so it's safe to step while it's open.
   if (!planModalOpen && (state.stage !== 'solve' || state.editing)) return;
   if (!Array.isArray(state.plan)) return;
+
+  // N / P — jump forward or back by a whole grouped section. Only meaningful in the
+  // collapsed plan view, where each detected cycle reads as one ×N section: instead of
+  // stepping move-by-move, N lands on the next section boundary and P on the current
+  // section's start (or the previous one when already at a boundary). No-ops when
+  // collapsed view is off.
+  const nextSection = e.key === 'n' || e.key === 'N';
+  const prevSection = e.key === 'p' || e.key === 'P';
+  if ((nextSection || prevSection) && settings.collapseCycles && state.plan.length) {
+    const segs = findCycles(state.plan);
+    const target = nextSection
+      ? nextSectionStart(segs, state.planIndex)
+      : prevSectionStart(segs, state.planIndex);
+    if (target === state.planIndex) return; // already at the end / start
+    e.preventDefault();
+    state.planIndex = target;
+    state.positions = computeSolvePositions();
+    if (planModalOpen) refreshPlanModal(); else render();
+    return;
+  }
+
   const advance = ['Enter', ' ', 'Spacebar', 'ArrowDown', 'ArrowRight'].includes(e.key);
   const back = ['ArrowUp', 'ArrowLeft', 'Backspace'].includes(e.key);
   if (!advance && !back) return;

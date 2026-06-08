@@ -61,6 +61,36 @@ export function findCycles(plan) {
   return segs;
 }
 
+// The plan index at the start of the next grouped section after `planIndex`, given
+// the segments from findCycles(). Each segment (a single move or a detected ×N cycle)
+// covers a contiguous block; this returns the end of the block the cursor sits in —
+// i.e. the next section boundary. Returns plan length once the cursor is in the last
+// section. Used by the collapsed-view "skip a whole section" (N) shortcut.
+export function nextSectionStart(segs, planIndex) {
+  let at = 0;
+  for (const seg of segs) {
+    at += seg.type === 'cycle' ? seg.length : 1;
+    if (at > planIndex) return at;
+  }
+  return at; // cursor is at or past the final boundary
+}
+
+// The plan index at the start of the section under the cursor — or the previous
+// section's start when the cursor already sits on a boundary. The mirror of
+// nextSectionStart(): used by the collapsed-view "step back a whole section" (P)
+// shortcut. Returns 0 once the cursor is in the first section.
+export function prevSectionStart(segs, planIndex) {
+  let at = 0;
+  let prev = 0;
+  for (const seg of segs) {
+    const end = at + (seg.type === 'cycle' ? seg.length : 1);
+    if (end >= planIndex) break;
+    prev = end;
+    at = end;
+  }
+  return prev;
+}
+
 // Row/group layout for the EXPANDED plan view (every move shown). Returns an ordered
 // list of items: { kind: 'row', index } or { kind: 'group', seg, indices: [...] }.
 //

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findCycles, expandedLayout } from '../src/cycles.js';
+import { findCycles, expandedLayout, nextSectionStart, prevSectionStart } from '../src/cycles.js';
 
 // Build a plan from a compact "P<dir>" shorthand, e.g. "1L 2R 1L".
 function plan(s) {
@@ -144,4 +144,39 @@ test('expandedLayout: mix of a single-move run then a multi-move cycle', () => {
   assert.deepEqual(items[1], { kind: 'row', index: 1 });
   assert.equal(items[2].kind, 'group');
   assert.deepEqual(items[2].indices, [2, 3, 4, 5]);
+});
+
+test('nextSectionStart: jumps to the end of the section under the cursor', () => {
+  // "1L" (single, 0) | "2L 3R x2" (cycle, 1..4) | "1R" (single, 5)
+  const segs = findCycles(plan('1L 2L 3R 2L 3R 1R'));
+  assert.deepEqual(segs.map((s) => s.type), ['single', 'cycle', 'single']);
+  // From the start of each section, N lands on the next boundary.
+  assert.equal(nextSectionStart(segs, 0), 1); // past the leading single
+  assert.equal(nextSectionStart(segs, 1), 5); // skip the whole cycle in one press
+  assert.equal(nextSectionStart(segs, 5), 6); // past the trailing single -> plan end
+});
+
+test('nextSectionStart: from inside a cycle still lands on that cycle\'s end', () => {
+  const segs = findCycles(plan('1L 2L 3R 2L 3R 1R')); // cycle spans 1..4
+  assert.equal(nextSectionStart(segs, 2), 5);
+  assert.equal(nextSectionStart(segs, 4), 5);
+});
+
+test('nextSectionStart: at or past the last boundary returns the plan length', () => {
+  const segs = findCycles(plan('1L 2R 3L')); // three singles, length 3
+  assert.equal(nextSectionStart(segs, 3), 3);
+});
+
+test('prevSectionStart: steps back to the current section\'s start, mirroring N', () => {
+  // "1L" (single, 0) | "2L 3R x2" (cycle, 1..4) | "1R" (single, 5)
+  const segs = findCycles(plan('1L 2L 3R 2L 3R 1R'));
+  assert.equal(prevSectionStart(segs, 6), 5); // back into the trailing single's start
+  assert.equal(prevSectionStart(segs, 5), 1); // on a boundary -> back to the cycle start
+  assert.equal(prevSectionStart(segs, 3), 1); // inside the cycle -> its start
+  assert.equal(prevSectionStart(segs, 1), 0); // on a boundary -> back to the leading single
+});
+
+test('prevSectionStart: at or before the first boundary returns 0', () => {
+  const segs = findCycles(plan('1L 2R 3L'));
+  assert.equal(prevSectionStart(segs, 0), 0);
 });
