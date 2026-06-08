@@ -3,6 +3,7 @@ import { nextActivePlate } from './active-plate.js';
 import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
 import { solve } from '../solver.js';
 import { findCycles, expandedLayout } from '../cycles.js';
+import { planColumnCount } from './plan-columns.js';
 import { createMapping, recommendNext, allMapped } from '../discovery.js';
 import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
@@ -17,6 +18,13 @@ const DIR_WORD = { L: 'Left', R: 'Right' };
 
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
+  {
+    date: '2026-06-08',
+    items: [
+      'The Full Plan view now spreads across multiple columns on wide, short screens, so more of it fits without scrolling.',
+      'Press Z while solving to open or close the Full Plan view.',
+    ],
+  },
   {
     date: '2026-06-07',
     items: [
@@ -319,7 +327,7 @@ function render() {
   footer.className = 'ap-footer';
   footer.innerHTML = `<label class="ap-kbd">
       <input type="checkbox" data-action="toggle-kbd"${kbdEnabled() ? ' checked' : ''}>
-      <span class="ap-kbd-tip" data-tip="Advance:  Enter · Space · ↓ · →&#10;Back:  ↑ · ← · Backspace&#10;Reset pins:  R">Keyboard shortcuts</span></label>`;
+      <span class="ap-kbd-tip" data-tip="Advance:  Enter · Space · ↓ · →&#10;Back:  ↑ · ← · Backspace&#10;Reset pins:  R&#10;Full plan:  Z">Keyboard shortcuts</span></label>`;
   wrap.appendChild(footer);
 
   appEl.appendChild(wrap);
@@ -368,20 +376,106 @@ function alignCycleBraces(root = appEl) {
 // Keep each cycle's ×N count on the same line as its highlighted step, so it stays
 // visible when the list auto-scrolls within a tall group (a centered count can land
 // off-screen). Inactive groups fall back to the CSS-default vertical centering.
+//
+// In the multi-column full-plan view a cycle can be taller than one column and
+// fragment across several (see layoutPlanColumns). Its bounding box then spans the
+// whole width, so the count — a flex child anchored to the group — lands beside the
+// wrong column. Detect that (group wider than one column pitch) and instead pin the
+// count absolutely, just right of the current step's own row, wherever it fragmented to.
 function positionCycleCounts(root = appEl) {
   const list = root.querySelector('.ap-steplist');
   if (!list) return;
+  const cols = parseInt(list.style.columnCount || '0', 10) || 0;
+  const colGap = parseFloat(getComputedStyle(list).columnGap) || 0;
+  const colPitch = cols > 1 ? (list.clientWidth + colGap) / cols : Infinity;
+  const listRect = list.getBoundingClientRect();
   for (const group of list.querySelectorAll('.cyc-group')) {
     const count = group.querySelector('.cyc-count');
     const cur = group.querySelector('.cur');
-    if (cur) {
+    const groupRect = group.getBoundingClientRect();
+    const fragmented = cols > 1 && groupRect.width > colPitch + 1;
+    if (cur && fragmented) {
+      // Take the badge out of the broken-up flex flow and place it next to the live
+      // step, in the space the column already reserves for it to the right of the rows.
+      // Anchor to the .cyc-rows right edge, not the step's text: rows are flex-start
+      // aligned so a shorter current step ends left of the box, but the bracket sits
+      // after the box's fixed width — anchoring to the text would collide with it.
+      // Then clear the closing bracket (rows → gap → brace → gap → badge): two group
+      // gaps plus the brace width, read from layout so it tracks the CSS.
+      const curRect = cur.getBoundingClientRect();
+      const rows = cur.closest('.cyc-rows');
+      const rowsRight = curRect.left + (rows ? parseFloat(rows.style.width) || curRect.width : curRect.width);
+      const gcs = getComputedStyle(group);
+      const brace = group.querySelector('.cyc-brace.right');
+      const clearance = 2 * (parseFloat(gcs.columnGap) || 0) +
+        (brace ? parseFloat(getComputedStyle(brace).width) || 0 : 0);
+      count.style.position = 'absolute';
+      count.style.alignSelf = '';
+      count.style.marginTop = '';
+      count.style.left = `${rowsRight - listRect.left + list.scrollLeft + clearance}px`;
+      count.style.top = `${curRect.top - listRect.top + list.scrollTop}px`;
+    } else if (cur) {
+      count.style.position = '';
+      count.style.left = '';
+      count.style.top = '';
       count.style.alignSelf = 'flex-start';
-      count.style.marginTop = `${cur.getBoundingClientRect().top - group.getBoundingClientRect().top}px`;
+      count.style.marginTop = `${cur.getBoundingClientRect().top - groupRect.top}px`;
     } else {
+      count.style.position = '';
+      count.style.left = '';
+      count.style.top = '';
       count.style.alignSelf = '';
       count.style.marginTop = '';
     }
   }
+}
+
+// Lay the full-plan list into multiple columns when it's too tall to fit the modal
+// in one column but the viewport is wide enough to hold more. We measure the plan's
+// natural one-column height against the height the modal grants the list, pick the
+// fewest columns that bring each back within that height (see planColumnCount), then
+// size the list and let the modal shrink-wrap to the columns actually used. Always
+// resets to one column first so each call re-measures from the natural layout.
+function layoutPlanColumns(root) {
+  const modal = root.querySelector('.pm-modal');
+  const list = root.querySelector('.pm-steplist');
+  if (!modal || !list) return;
+  list.style.columnCount = '';
+  list.style.columnGap = '';
+  list.style.width = '';
+  list.style.height = '';
+  modal.style.width = '';
+  modal.style.maxWidth = '';
+
+  const availHeight = list.clientHeight; // height the modal grants the list (capped at 84vh)
+  const naturalHeight = list.scrollHeight; // full one-column content height
+  // Widest line, measured intrinsically. Step rows wrap by default, so max-content
+  // alone would report the widest word — pin white-space to nowrap while measuring so
+  // we get the full single-line row width that each column must actually hold.
+  list.style.whiteSpace = 'nowrap';
+  list.style.width = 'max-content';
+  const colWidth = Math.ceil(list.getBoundingClientRect().width);
+  list.style.width = '';
+  list.style.whiteSpace = '';
+
+  const GAP = 32;
+  const cols = planColumnCount({
+    naturalHeight,
+    availHeight,
+    colWidth,
+    availWidth: root.clientWidth * 0.92, // leave a little breathing room at the edges
+    gap: GAP,
+  });
+  if (cols <= 1) return;
+  list.style.columnCount = String(cols);
+  list.style.columnGap = `${GAP}px`;
+  list.style.width = `${cols * colWidth + (cols - 1) * GAP}px`;
+  // column-fill: auto only breaks columns at a *definite* height; the list's
+  // flex-derived height doesn't qualify, so pin it explicitly to the height the
+  // modal granted. Each column then fills to availHeight before the next begins.
+  list.style.height = `${availHeight}px`;
+  modal.style.width = 'max-content'; // shrink-wrap the modal to the columns in use
+  modal.style.maxWidth = '92vw';
 }
 
 // Grow the plan list to fill the leftover viewport height so the page itself
@@ -1074,7 +1168,7 @@ function planCardEl() {
 // here rebuilds the modal in place, clicking a step jumps there and closes. Every
 // dismissal routes through closePlanModal so the key listener is always cleaned up.
 function planModalHtml() {
-  return `<div class="pm-modal" role="dialog" aria-modal="true" aria-labelledby="pm-title">
+  return `<div class="pm-modal" role="dialog" aria-modal="true" aria-labelledby="pm-title" tabindex="-1">
     <button class="cl-close" data-pm="close" aria-label="Close full plan">✕</button>
     <div class="pm-head">
       <h2 id="pm-title">Full Plan</h2>
@@ -1101,6 +1195,7 @@ function refreshPlanModal() {
   if (!ov) return;
   ov.innerHTML = planModalHtml();
   alignCycleBraces(ov);
+  layoutPlanColumns(ov);
   positionCycleCounts(ov);
   scrollCurrentStepIntoView(ov);
 }
@@ -1149,9 +1244,13 @@ function openPlanModal() {
   // Capture phase so Esc closes the modal before the app's global key handlers see it.
   document.addEventListener('keydown', onPlanModalKey, true);
   alignCycleBraces(ov);
+  layoutPlanColumns(ov);
   positionCycleCounts(ov);
-  const close = ov.querySelector('.cl-close');
-  if (close) close.focus();
+  // Move focus into the dialog (so Esc/Tab and screen readers work) without lighting
+  // up the ✕ button's focus ring when opened via the Z shortcut: focus the dialog
+  // container itself, which carries no visible outline.
+  const dialog = ov.querySelector('.pm-modal');
+  if (dialog) dialog.focus();
 }
 
 function solvePanel(side, boardProps) {
@@ -1500,6 +1599,20 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Z — toggle the full-plan modal while solving (the keyboard twin of "Show Full
+  // Plan"): opens it, or closes it again if it's already up.
+  if (e.key === 'z' || e.key === 'Z') {
+    if (planModalOpen) {
+      e.preventDefault();
+      closePlanModal();
+    } else if (state.stage === 'solve' && !state.editing &&
+        Array.isArray(state.plan) && state.plan.length) {
+      e.preventDefault();
+      openPlanModal();
+    }
+    return;
+  }
+
   // Setup / Edit-positions — digits set the active plate's pin; arrows move the cursor.
   if (!planModalOpen && isPositionEditing()) {
     if (handlePositionKey(e.key)) { e.preventDefault(); render(); }
@@ -1537,6 +1650,10 @@ appEl.addEventListener('change', (e) => {
   reader.readAsText(file);
 });
 
-window.addEventListener('resize', fitPlanList);
+window.addEventListener('resize', () => {
+  fitPlanList();
+  // The full-plan modal's column count depends on the viewport, so rebuild it.
+  if (document.getElementById('pm-overlay')) refreshPlanModal();
+});
 
 render();

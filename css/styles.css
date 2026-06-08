@@ -311,9 +311,13 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .ap-fullplan:hover { color: #eee; border-color: #555; }
 /* full-plan modal — reuses the .cl-overlay backdrop; the plan list grows to fill it */
 .pm-modal { position: relative; display: flex; flex-direction: column; width: 100%; max-width: 720px; max-height: 84vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px 20px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); }
+.pm-modal:focus { outline: none; } /* focused on open for a11y; no visible ring on the dialog container */
 .pm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 34px 12px 0; }
 .pm-head h2 { margin: 0; font-size: 16px; letter-spacing: 2px; text-transform: uppercase; color: #f0e2c6; }
-.pm-steplist { flex: 1 1 auto; min-height: 0; max-height: none; font-size: 14px; line-height: 1.95; overscroll-behavior: contain; }
+.pm-steplist { position: relative; flex: 1 1 auto; min-height: 0; max-height: none; font-size: 14px; line-height: 1.95; overscroll-behavior: contain; column-fill: auto; }
+/* When the plan spills into multiple columns (see layoutPlanColumns), keep each step
+   row and each bracketed cycle whole rather than splitting it across a column break. */
+.pm-steplist > div, .pm-steplist > .cyc-group { break-inside: avoid; }
 .cpl-card { display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-bottom: 1px solid #232220; font-size: 12px; }
 .cpl-card:last-child { border-bottom: 0; }
 .cpl-card .mv { width: 86px; color: #cdc; }
