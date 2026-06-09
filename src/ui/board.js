@@ -70,17 +70,22 @@ export function createBoard(host, s) {
           const startPos = s.positions[i];
           const colW = field.getBoundingClientRect().width / FIELD_COLS;
           let lastPos = startPos;
+          let moved = false;
           document.body.classList.add('tp-dragging');
-          s.onSetPosition?.(i, startPos); // selecting the plate (no-move click)
+          // With an onClick handler, a tap selects and only a real drag moves/records
+          // (the mapping board). Without one, pointerdown doubles as select so a plain
+          // tap still picks the plate (Setup / Solve-edit, which have no onClick).
+          if (!s.onClick) s.onSetPosition?.(i, startPos);
           const onMove = (ev) => {
             const dxCols = Math.round((ev.clientX - startX) / colW);
             const next = dragToPosition(startPos, dxCols);
-            if (next !== lastPos) { lastPos = next; s.onSetPosition?.(i, next); }
+            if (next !== lastPos) { lastPos = next; moved = true; s.onSetPosition?.(i, next); }
           };
           const onUp = () => {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
             document.body.classList.remove('tp-dragging');
+            if (!moved) s.onClick?.(i); // a tap with no drag is a click → select
           };
           window.addEventListener('pointermove', onMove);
           window.addEventListener('pointerup', onUp);

@@ -1,7 +1,12 @@
 import { createBoard } from './board.js';
 import { nextActivePlate } from './active-plate.js';
 import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
-import { solve } from '../solver.js';
+import { solve, applySequence } from '../solver.js';
+import {
+  createRecording, tagOf, positionsOf, couplingRow,
+  toggleTag, dragActive, dragOther, validRecording,
+} from './mapping-record.js';
+import { coachingMessage } from './coaching.js';
 import { findCycles, expandedLayout, nextSectionStart, prevSectionStart } from '../cycles.js';
 import { planColumnCount } from './plan-columns.js';
 import { createMapping, recommendNext, allMapped } from '../discovery.js';
@@ -83,7 +88,7 @@ function freshSetup(n) {
     positions: Array(n).fill(GOAL),
     initial: null,
     mapping: null,
-    rel: {},
+    rec: null,
     editing: false,
     location: '',
     kind: 'Chest',
@@ -208,17 +213,17 @@ function suggestDefault() {
   const rec = recommendNext(state.positions, m);
   if (rec && rec.type === 'probe') next = rec.plate;
   state.activePlate = next;
-  state.rel = next == null ? {} : relFromMapping(next);
+  state.rec = next == null ? null : createRecording(state.positions, next, relFromMapping(next));
 }
 
 function saveActivePlate() {
-  const a = state.activePlate;
-  const row = state.mapping.coupling[a].map(() => 0);
-  row[a] = 1; // the plate moves itself, by definition
-  for (const j of Object.keys(state.rel)) row[+j] = state.rel[j] === 'with' ? 1 : -1;
-  state.mapping.coupling[a] = row;
-  state.mapping.status[a] = 'done';
-  suggestDefault();
+  const rec = state.rec;
+  if (!rec) return;
+  if (!validRecording(rec)) return; // a successful press can't push a slide off an edge (that's a jam)
+  state.mapping.coupling[rec.active] = couplingRow(rec);
+  state.positions = positionsOf(rec); // commit the live, recorded positions
+  state.mapping.status[rec.active] = 'done';
+  suggestDefault(); // re-seed the next recording against the new positions
 }
 
 function escapeHtml(s) {
@@ -578,6 +583,25 @@ function railEl() {
 }
 
 // ---------- Setup ----------
+
+// Mapping-stage board interaction. board.js distinguishes a tap (no drag) from a drag:
+//  - tap any plate          -> onMapClick selects it to record (the big, obvious target).
+//  - drag the active plate  -> sets its one-slot press direction.
+//  - drag another plate     -> tags it with/opposite, live-linked to the rel buttons.
+// Every press moves at most one slot (the recording helpers clamp), and positions stay
+// tentative in state.rec until Save commits them — the board can't silently drift.
+function onMapClick(i) {
+  if (state.activePlate === i) return; // already recording this plate; keep its tags
+  state.activePlate = i;
+  state.rec = createRecording(state.positions, i, relFromMapping(i));
+  render();
+}
+function onMapDrag(i, pos) {
+  const rec = state.rec;
+  if (!rec) return;
+  state.rec = i === rec.active ? dragActive(rec, pos) : dragOther(rec, i, pos);
+  render();
+}
 
 // Positions are set by dragging slides on the board (or 1–7 keys) — see onDragPosition and
 // the keydown handler. Active in the Setup stage and the Solve stage's "Edit positions"
@@ -1012,7 +1036,6 @@ function setupPanel() {
 
 function mappingView() {
   const m = state.mapping;
-  if (state.rel == null) state.rel = {};
   if (state.activePlate === undefined) suggestDefault();
 
   const active = state.activePlate;
@@ -1049,7 +1072,7 @@ function mappingView() {
   const rowsRight = state.positions.map((_, i) => {
     if (i === active) return `<span class="self-note">the plate you're moving</span>`;
     if (active == null) return '';
-    const r = state.rel[i];
+    const r = state.rec ? tagOf(state.rec, i) : 'none';
     return `<div class="rel">
       <span class="rel-btn ${r === 'with' ? 'on-with' : ''}" data-action="set-rel" data-plate="${i}" data-rel="with">Moves with</span>
       <span class="rel-btn ${r === 'opposite' ? 'on-opp' : ''}" data-action="set-rel" data-plate="${i}" data-rel="opposite">Moves opposite</span>
@@ -1058,8 +1081,9 @@ function mappingView() {
 
   const foot = document.createElement('div');
   foot.className = 'ap-card';
+  const recInvalid = isActive && !!state.rec && !validRecording(state.rec);
   const saveBlock = isActive
-    ? `<span class="ap-btn primary" data-action="save-next">Save plate ›</span>
+    ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge. A successful press can't do that — it's a jam. Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
        <div class="muted" style="margin-top:8px">Saved plates turn <span style="color:var(--goal)">green</span>.</div>
        <div class="note" style="margin-top:10px">If pressing a plate jams at an edge, you won't see its real connections — press the
          other direction, or move that plate toward center first, then map it.</div>`
@@ -1070,9 +1094,21 @@ function mappingView() {
   foot.innerHTML = saveBlock + solveBlock;
   col.appendChild(foot);
 
+  // While recording, the board shows the tentative live positions (baseline + the press
+  // and its coupled shifts); committed positions are unchanged until Save.
+  const boardPositions = state.rec ? positionsOf(state.rec) : state.positions;
   // labels go green once a plate is saved
-  const labels = state.positions.map((p, i) => `<b${m.status[i] === 'done' ? ' class="done"' : ''}>P${i + 1}</b> · ${p}`);
-  createBoard(boardHost, { positions: state.positions, selectable: true, highlightPlate: active, labels, rowsRight });
+  const labels = boardPositions.map((p, i) => `<b${m.status[i] === 'done' ? ' class="done"' : ''}>P${i + 1}</b> · ${p}`);
+  createBoard(boardHost, {
+    positions: boardPositions,
+    selectable: true,
+    draggable: active != null,
+    onSetPosition: onMapDrag,
+    onClick: onMapClick,
+    highlightPlate: active,
+    labels,
+    rowsRight,
+  });
   return col;
 }
 
@@ -1394,7 +1430,7 @@ appEl.addEventListener('click', (e) => {
       if (!state.mapping || state.mapping.n !== state.n) state.mapping = createMapping(state.n);
       state.initial = state.positions.slice(); // the setup positions are the lock's reset point
       state.activePlate = undefined;
-      state.rel = {};
+      state.rec = null;
       state.stage = 'discovery';
       suggestDefault();
       break;
@@ -1411,7 +1447,7 @@ appEl.addEventListener('click', (e) => {
       discardPendingEdit();
       if (target === 'lock') state.stage = 'lock';
       else if (target === 'setup') { state.stage = 'setup'; state.activePlate = 0; }
-      else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; suggestDefault(); }
+      else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; state.rec = null; suggestDefault(); }
       else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.plan = undefined; }
       break;
     }
@@ -1444,16 +1480,12 @@ appEl.addEventListener('click', (e) => {
     case 'select-plate': {
       const p = +t.dataset.plate;
       state.activePlate = p;
-      state.rel = relFromMapping(p);
+      state.rec = createRecording(state.positions, p, relFromMapping(p));
       break;
     }
-    case 'set-rel': {
-      const p = +t.dataset.plate;
-      const r = t.dataset.rel;
-      if (state.rel[p] === r) delete state.rel[p];
-      else state.rel[p] = r;
+    case 'set-rel':
+      if (state.rec) state.rec = toggleTag(state.rec, +t.dataset.plate, t.dataset.rel);
       break;
-    }
     case 'save-next': saveActivePlate(); break;
 
     case 'did-it':
@@ -1505,7 +1537,7 @@ appEl.addEventListener('click', (e) => {
         state.editBackup = undefined;
         state.plan = undefined;
         state.activePlate = undefined;
-        state.rel = {};
+        state.rec = null;
         if (state.stage === 'discovery') suggestDefault();
       }
       break;
