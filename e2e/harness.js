@@ -349,7 +349,7 @@ export class Driver {
 
       // The app's suggested probe (the active recording's plate + direction).
       const hint = (await this.text('.map-instruction')) || '';
-      const hm = hint.match(/Press\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
+      const hm = hint.match(/Slide\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
       let choice = null;
       if (hm && !blocked.has(`${posKey}|${+hm[1] - 1}${DIR_CODE[hm[2]]}`)) {
         choice = { plate: +hm[1] - 1, dir: DIR_CODE[hm[2]] };
@@ -422,16 +422,19 @@ export class Driver {
         const jamBtn = await this.page.$('[data-action="probe-jammed"]');
         if (jamBtn) await jamBtn.click();
         else this.issue('ui', 'press jammed but there is no control to tell the app');
-        // The game wiggles the plates the press would have pushed out; report
-        // the ones this player happened to notice through the optional chips
-        // (every wiggler sits on an edge, so a chip must exist for each).
+        // The game wiggles every linked plate; report the ones this player
+        // happened to notice via the rows' wiggled? column, then leave jam
+        // mode through its Done button.
         for (const j of r.wiggle || []) {
           if (j === choice.plate) continue;
           if (this.rng() >= 0.6) { this.wigglesMissed++; continue; } // didn't catch it
           const chip = await this.page.$(`[data-action="jam-wiggle"][data-plate="${j}"]`);
           if (chip) { await chip.click(); this.wigglesSeen++; }
-          else this.issue('ui', `the lock wiggled P${j + 1} on the jam but there is no chip to report it`);
+          else this.issue('ui', `the lock wiggled P${j + 1} on the jam but there is no control to report it`);
         }
+        const jamDone = await this.page.$('[data-action="jam-done"]');
+        if (jamDone) await jamDone.click();
+        else this.issue('ui', 'no Done control to leave the jam acknowledgement');
         if (r.broke && !brokeOnce) {
           await this.shot('after-first-break');
           brokeOnce = true;

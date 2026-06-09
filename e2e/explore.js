@@ -72,7 +72,7 @@ try {
     // map two plates the truthful way, then reload
     for (let i = 0; i < 2; i++) {
       const hint = (await d.text('.map-instruction')) || '';
-      const m = hint.match(/Press\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
+      const m = hint.match(/Slide\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
       if (!m) { d.issue('deadend', 'no suggestion while building reload fixture'); return; }
       const positions = await d.boardPositions();
       const r = d.game.press(+m[1] - 1, m[2] === 'Left' ? 'L' : 'R');
@@ -156,7 +156,7 @@ try {
       const head = (await d.text('.map-wrap .ap-card')) || '';
       if (head.includes('All plates mapped')) break;
       const hint = (await d.text('.map-instruction')) || '';
-      const m = hint.match(/Press\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
+      const m = hint.match(/Slide\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
       if (!m) { d.issue('deadend', 'no suggestion in wrong-mapping scenario'); return; }
       const plate = +m[1] - 1;
       const dir = m[2] === 'Left' ? 'L' : 'R';
@@ -254,7 +254,7 @@ try {
 
     // Map one plate so positions move off the reset point.
     const hint = (await d.text('.map-instruction')) || '';
-    const m = hint.match(/Press\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
+    const m = hint.match(/Slide\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
     if (!m) { d.issue('deadend', 'no suggestion in R-reset scenario'); return; }
     const plate = +m[1] - 1;
     const dir = m[2] === 'Left' ? 'L' : 'R';

@@ -32,11 +32,12 @@ const CHANGELOG = [
   {
     date: '2026-06-09',
     items: [
-      'Pressed a plate and it jammed? Click “It jammed” — the app remembers that press fails at those positions (even after a pick break) and guides you to a better one instead of repeating itself.',
+      'Slid a plate and it jammed? Click “It jammed” — the app remembers that move fails at those positions (even after a pick break) and guides you to a better one instead of repeating itself.',
       'The app now tracks your pick like the game does: the first jam is a warning, the second breaks the pick — and the board resets itself to the start to match the snapped-back slides.',
       'Saw slides wiggle when it jammed? Tap them on the jam note (optional) — any slide counts, since a wiggle means it’s linked. When only one slide sits on an edge the app identifies the blocker by itself, and it warns when your taps can’t include the real blocker.',
-      'Long stretches of the same press now step as one: the Next move card reads e.g. “P2 ▶ Right ×6” with a “Did all 6” button, so a 68-press solution takes ~20 clicks instead of 68.',
-      'When the edges can’t all be cleared with mapped moves, the app now suggests known moves that pull a slide off an edge; if every untried press jams, it offers a layout-changing move rather than leaving you guessing.',
+      'Long stretches of the same move now step as one: the Next move card reads e.g. “P2 ▶ Right ×6” with a “Did all 6” button, so a 68-move solution takes ~20 clicks instead of 68.',
+      'When the edges can’t all be cleared with mapped moves, the app now suggests known moves that pull a slide off an edge; if every untried move jams, it offers a layout-changing one rather than leaving you guessing.',
+      'The mapping screen is now a ledger: every action lives on the slider rows under two labeled columns — “moved?” (⇉ with / ⇄ opposite) and “move it” (◀ ▶ for mapped slides) — with the column flipping to “wiggled?” while you acknowledge a jam. Full words on wide screens, symbols on phones.',
       '“Edit positions” now only corrects where the slides are. The lock’s reset point stays put, so Reset always lands where the game actually snaps back to.',
       'Pressing R to reset during mapping now behaves exactly like the Reset button — the move being recorded follows the reset instead of showing stale positions.',
     ],
@@ -1130,7 +1131,6 @@ function jamNoticeHtml(jn) {
        it won't be suggested again. One more jam breaks the pick.`;
   const links = state.knownLinks || [];
   const edgeOthers = jamEdgeOthers(jn);
-  const chips = [];
   let edgeTapped = false;
   let anyTapped = false;
   for (let j = 0; j < state.n; j++) {
@@ -1139,11 +1139,9 @@ function jamNoticeHtml(jn) {
     const on = state.mapping.coupling[jn.plate][j] !== 0 || links.includes(`${jn.plate}|${j}`);
     if (on) anyTapped = true;
     if (on && onEdge) edgeTapped = true;
-    chips.push(`<span class="ap-btn${on ? ' primary' : ''}" data-action="jam-wiggle" data-plate="${j}">${plateLabel(j)}</span>`);
   }
   const auto = jn.autoLearned != null
-    ? `<div class="muted" style="margin-top:6px"><b>${plateLabel(jn.autoLearned)}</b> is the only slide on an edge, so it
-        must be the blocker — that link was recorded automatically.</div>`
+    ? ` <b>${plateLabel(jn.autoLearned)}</b> is the only slide on an edge, so it must be the blocker — link recorded ✓.`
     : '';
   // The blocker always wiggles and always sits on an edge: taps that include no
   // edge slide are provably missing one.
@@ -1151,12 +1149,7 @@ function jamNoticeHtml(jn) {
     ? `<div class="muted" style="margin-top:4px">⚠ The blocking slide always sits on an edge — you missed one of
         ${edgeOthers.map(plateLabel).join(', ')}.</div>`
     : '';
-  const wiggle = chips.length
-    ? `<div class="muted" style="margin-top:8px">Saw slides <i>wiggle</i>? Tap them — a wiggle means it's linked to
-        ${plateLabel(jn.plate)} (tap again to undo). Optional; missing some is fine.</div>
-       <div style="margin-top:4px">${chips.join(' ')}</div>${missed}`
-    : '';
-  return `<div class="note" style="margin-top:6px">${lead}${auto}${wiggle}</div>`;
+  return `<div class="note" style="margin-top:6px">${lead}${auto}${missed}</div>`;
 }
 
 function mappingView() {
@@ -1172,13 +1165,17 @@ function mappingView() {
 
   const isActive = active != null;
   const done = allMapped(m);
+  // Jam mode: right after "It jammed", the rows' tag column becomes the
+  // wiggled? column until the player taps Done (or does anything else).
+  const jamMode = !!state.jamNotice && !done;
 
   // Board data derived from the in-progress recording: the solid slide sits at the
   // tentative landing (positionsOf), a faint ghost marks each moved plate's start, and
-  // moved plates get a "start → landing" label — so a previewed press never looks
-  // committed. With "Suggest moves" off we don't preview the suggested press on entry:
+  // moved plates get a "start → landing" label — so a previewed move never looks
+  // committed. With "Suggest moves" off we don't preview the suggested move on entry:
   // the board shows the real positions until you actually record a move (recTouched).
-  const previewing = !!state.rec && (suggestEnabled() || state.recTouched);
+  // In jam mode nothing moved — show the committed positions, no preview.
+  const previewing = !jamMode && !!state.rec && (suggestEnabled() || state.recTouched);
   const boardPositions = previewing ? positionsOf(state.rec) : state.positions;
   const ghosts = previewing
     ? boardPositions.map((p, i) => (p !== state.rec.baseline[i] ? state.rec.baseline[i] : null))
@@ -1189,7 +1186,7 @@ function mappingView() {
   const head = document.createElement('div');
   head.className = 'ap-card';
   const suggestHtml =
-    suggestEnabled() && suggestion && suggestion.type === 'probe' && suggestion.plate !== active
+    !jamMode && suggestEnabled() && suggestion && suggestion.type === 'probe' && suggestion.plate !== active
       ? `<div class="muted" style="margin-top:6px">Suggested: <b style="color:var(--gold)">${plateLabel(
           suggestion.plate
         )}</b> ${suggestion.safe ? '✓ safe' : '⚠ may jam'}
@@ -1209,16 +1206,16 @@ function mappingView() {
   // what it cost the pick, and offers the optional wiggle capture. Cleared on
   // the next click that isn't part of the jam flow.
   const jamHtml = state.jamNotice ? jamNoticeHtml(state.jamNotice) : '';
-  // Tier 4: the player has reported every viable press as jammed at these positions.
+  // Tier 4: the player has reported every viable move as jammed at these positions.
   const stuckHtml =
-    suggestEnabled() && suggestion && suggestion.type === 'stuck'
+    !jamMode && suggestEnabled() && suggestion && suggestion.type === 'stuck'
       ? `<div class="note" style="margin-top:6px">${suggestion.reason}</div>`
       : '';
   // The edge-clearing plan (tier 2 of recommendNext), rendered as a Done/Skip panel.
   // A Skip is remembered against the current positions so it stays dismissed until the
   // board changes (Save, or a Done'd move); any position change re-offers it.
   const planPending =
-    suggestEnabled() && suggestion && suggestion.type === 'plan' && state.skipPlanKey !== state.positions.join(',');
+    !jamMode && suggestEnabled() && suggestion && suggestion.type === 'plan' && state.skipPlanKey !== state.positions.join(',');
   const planHtml = planPending
     ? `<div class="plan-suggest" style="margin-top:6px">
         <div class="muted">${suggestion.reason}</div>
@@ -1229,21 +1226,24 @@ function mappingView() {
         <span class="ap-btn" data-action="plan-skip">Skip</span>
        </div>`
     : '';
-  // One instruction line carries the whole loop: which plate, which press (when
+  // One instruction line carries the whole loop: which slider, which move (when
   // suggestions are on; direction follows the recording's live deltaI), and how
-  // to record the result. The board previews the press as a ghost → solid move.
-  const instructionHtml = !isActive
+  // to record the result. The board previews the move as a ghost → solid slide.
+  const instructionHtml = jamMode
+    ? `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Tap <b style="color:var(--gold)">∿</b> on every
+        slide you saw wiggle, then <b>Done</b>. Optional — missing some is fine.</div>`
+    : !isActive
     ? `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`
     : suggestEnabled() && state.rec
-    ? `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Press <b style="color:var(--gold)">${plateLabel(active)}</b>
-        <span class="dir">${dirArrow(activeDir)} ${DIR_WORD[activeDir]}</span> in the lock, then mark what moved —
-        <span style="color:var(--goal)">Moves with</span> = same way, <span style="color:var(--danger)">Moves opposite</span> = the other.</div>`
+    ? `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Slide <b style="color:var(--gold)">${plateLabel(active)}</b>
+        <span class="dir">${dirArrow(activeDir)} ${DIR_WORD[activeDir]}</span> in the lock, then fill the <b>moved?</b> column —
+        <span style="color:var(--goal)">⇉ with</span> = same way, <span style="color:var(--danger)">⇄ opposite</span> = the other.</div>`
     : `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Recording <b style="color:var(--gold)">${plateLabel(active)}</b> —
-        press it one slot in the lock, then mark what moved
-        (<span style="color:var(--goal)">Moves with</span> / <span style="color:var(--danger)">Moves opposite</span>).</div>`;
+        slide it one slot in the lock, then fill the <b>moved?</b> column
+        (<span style="color:var(--goal)">⇉ with</span> / <span style="color:var(--danger)">⇄ opposite</span>).</div>`;
   // Legend explaining the ghost, shown only while a previewed move is on the board.
   const ghostLegendHtml = hasGhost
-    ? `<div class="muted" style="margin-top:4px;font-size:12px"><b style="color:var(--gold);font-weight:600">Dashed</b> = where the slide is now · solid = where the press lands.</div>`
+    ? `<div class="muted" style="margin-top:4px;font-size:12px"><b style="color:var(--gold);font-weight:600">Dashed</b> = where the slide is now · solid = where the move lands.</div>`
     : '';
   const title = done ? `Map the lock · all ${m.n} mapped ✓` : `Map the lock · ${mapped} of ${m.n} mapped`;
   // Per-user toggle: off hides the app's move guidance (preview, suggested-press text,
@@ -1252,63 +1252,81 @@ function mappingView() {
   head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${instructionHtml}${statusHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
   col.appendChild(head);
 
+  // Ledger column headers: words live HERE, so the row buttons can stay compact
+  // symbols. The tag column flips meaning while acknowledging a jam. Shown
+  // whenever the rows carry controls — including re-recording a mapped plate.
+  if (!done || isActive || jamMode) {
+    const lh = document.createElement('div');
+    lh.className = 'ledger-head';
+    lh.innerHTML = `<span class="lh-tag">${jamMode ? 'wiggled?' : 'moved?'}</span><span class="lh-move">move it</span>`;
+    col.appendChild(lh);
+  }
+
   const boardHost = document.createElement('div');
   col.appendChild(boardHost);
 
-  // Manual reposition: apply a known move (a press of an already-mapped plate) to the live
-  // positions — e.g. to pull a slide off an edge before mapping it. Only legal (in-bounds)
-  // presses of mapped plates (whose full coupling is known) are offered. Always available,
-  // independent of the Suggest-moves toggle and the auto edge-clearing plan.
-  const knownMoves = [];
-  if (!done) {
-    for (let i = 0; i < m.n; i++) {
-      if (m.status[i] !== 'done') continue;
-      for (const dir of ['L', 'R']) {
-        if (isLegal(state.positions, m.coupling, i, dir)) knownMoves.push({ plate: i, dir });
-      }
-    }
-  }
-  // Whether the slides have moved from the lock's reset point, so a Reset is meaningful.
-  const canReset = !done && !!state.initial && state.positions.join(',') !== state.initial.join(',');
-  if (knownMoves.length || canReset) {
-    const movesBlock = knownMoves.length
-      ? `<div class="muted" style="margin:2px 0 8px;font-size:12px">Reposition with mapped moves (press them in the lock too) — e.g. to pull a slide off an edge.</div>
-         <div class="ms-btns">${knownMoves
-           .map((mv) => `<span class="ap-btn" data-action="apply-move" data-plate="${mv.plate}" data-dir="${mv.dir}">${plateLabel(mv.plate)} <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span></span>`)
-           .join('')}</div>`
-      : '';
-    const resetBlock = canReset
-      ? `<div class="muted" style="margin:${knownMoves.length ? '12' : '2'}px 0 6px;font-size:12px">Pick broke? Reset snaps the board back to the start to match the lock (mapping kept).</div>
-         <span class="ap-btn" data-action="reset-pins">Reset</span>`
-      : '';
-    const moveCard = document.createElement('div');
-    moveCard.className = 'ap-card';
-    moveCard.innerHTML = `<div class="ap-h">Move slides</div>${movesBlock}${resetBlock}`;
-    col.appendChild(moveCard);
-  }
-
+  // Per-row ledger controls. "move it": ◀ ▶ apply this plate's own known move to
+  // reposition (do it in the lock too) — live on mapped rows when legal. The tag
+  // column records how the ACTIVE slider's move affected this plate, or (in jam
+  // mode) whether it wiggled. Both can be needed on the same row: a mapped
+  // plate's arrows reposition it, while its cell in the active row is its own
+  // unknown to tag.
+  const jn = state.jamNotice;
   const rowsRight = state.positions.map((_, i) => {
-    if (i === active) return `<span class="self-note">the plate you're moving</span>`;
+    // Rows carry controls while there's a recording (including re-recording a
+    // mapped plate after the lock is fully mapped) or a jam acknowledgement.
+    if (active == null && !jamMode) return '';
+    const moveBtns = ['L', 'R']
+      .map((d) => {
+        // Repositioning is a mapping-phase tool; during a review of a fully
+        // mapped lock the arrows stay dormant (Solve has Edit positions).
+        const ok = !done && m.status[i] === 'done' && isLegal(state.positions, m.coupling, i, d);
+        return ok
+          ? `<span class="led-btn" data-action="apply-move" data-plate="${i}" data-dir="${d}" title="Slide ${plateLabel(i)} ${DIR_WORD[d]} (a mapped move — do it in the lock too)">${dirArrow(d)}</span>`
+          : `<span class="led-btn dis">${dirArrow(d)}</span>`;
+      })
+      .join('');
+    const moveGroup = `<span class="led-group move">${moveBtns}</span>`;
+
+    if (jamMode) {
+      if (i === jn.plate) return `<span class="led-row"><span class="led-group"><span class="self-note">jammed</span></span>${moveGroup}</span>`;
+      const on = m.coupling[jn.plate][i] !== 0 || (state.knownLinks || []).includes(`${jn.plate}|${i}`);
+      return `<span class="led-row"><span class="led-group">
+          <span class="led-btn${on ? ' on-wig' : ''}" data-action="jam-wiggle" data-plate="${i}"
+            title="${plateLabel(i)} wiggled when ${plateLabel(jn.plate)} jammed — they're linked">∿<span class="led-word"> wiggled?</span></span>
+        </span>${moveGroup}</span>`;
+    }
+
+    if (i === active) return `<span class="led-row"><span class="led-group"><span class="self-note">sliding</span></span>${moveGroup}</span>`;
     if (active == null) return '';
     const r = state.rec ? tagOf(state.rec, i) : 'none';
-    // A soft link (seen wiggling on one of this plate's jams, sign unknown):
-    // expect this slide to move — the press will tell you which way.
+    // ∿ marks a soft link (wiggled on one of the active plate's jams, direction
+    // unknown): expect this slide to move — the move will show which way.
     const linked = r === 'none' && (state.knownLinks || []).includes(`${active}|${i}`)
-      ? `<span class="muted" style="font-size:10px;align-self:center" title="This slide wiggled when ${plateLabel(active)} jammed — it's linked; the press will show which way.">∿ linked</span>`
+      ? `<span class="muted" style="font-size:10px" title="Wiggled when ${plateLabel(active)} jammed — linked; the move will show which way.">∿</span>`
       : '';
-    return `<div class="rel">
-      <span class="rel-btn ${r === 'with' ? 'on-with' : ''}" data-action="set-rel" data-plate="${i}" data-rel="with">Moves with</span>
-      <span class="rel-btn ${r === 'opposite' ? 'on-opp' : ''}" data-action="set-rel" data-plate="${i}" data-rel="opposite">Moves opposite</span>${linked}
-    </div>`;
+    return `<span class="led-row"><span class="led-group">
+        <span class="led-btn${r === 'with' ? ' on-with' : ''}" data-action="set-rel" data-plate="${i}" data-rel="with"
+          title="Moved the same way as ${plateLabel(active)}">⇉<span class="led-word"> With</span></span>
+        <span class="led-btn${r === 'opposite' ? ' on-opp' : ''}" data-action="set-rel" data-plate="${i}" data-rel="opposite"
+          title="Moved the other way">⇄<span class="led-word"> Opposite</span></span>${linked}
+      </span>${moveGroup}</span>`;
   });
 
   const foot = document.createElement('div');
   foot.className = 'ap-card';
   const recInvalid = isActive && !!state.rec && !validRecording(state.rec);
-  const saveBlock = isActive
-    ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge — a real press can't do that (it would jam). Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
-       <span class="ap-btn" data-action="probe-jammed" title="The press was blocked at an edge — nothing moved. Tells the app so it stops suggesting this press here.">It jammed ⚠</span>
-       <div class="muted" style="margin-top:8px">Press blocked instead? Click <b>It jammed</b> — a jam shows no links, and the app will steer around it.</div>`
+  // The Reset lives with the actions now that the Move slides panel is gone.
+  const canReset = !done && !!state.initial && state.positions.join(',') !== state.initial.join(',');
+  const resetBtn = canReset
+    ? `<span class="ap-btn" data-action="reset-pins" title="Pick broke? Snap the board back to the start to match the lock (mapping kept).">Reset</span>`
+    : '';
+  const saveBlock = jamMode
+    ? `<span class="ap-btn primary" data-action="jam-done">Done ›</span> ${resetBtn}`
+    : isActive
+    ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge — a real move can't do that (it would jam). Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
+       <span class="ap-btn" data-action="probe-jammed" title="The move was blocked at an edge — nothing moved. Tells the app so it stops suggesting it here.">It jammed ⚠</span> ${resetBtn}
+       <div class="muted" style="margin-top:8px">Move blocked instead? Click <b>It jammed</b> — a jam shows no links, and the app will steer around it.</div>`
     : '';
   const solveBlock = done
     ? `<div style="${isActive ? 'margin-top:12px' : ''}"><span class="ap-btn primary" data-action="goto-solve">Solve ›</span></div>`
@@ -1366,7 +1384,7 @@ function moveSubText(coupling, pos, i) {
   const mv = state.plan[i];
   const run = runLengthAt(i);
   // The ✓ safe badge already says no plate hits an edge — don't repeat it here.
-  const runNote = run > 1 ? ` Press it ${run}× in a row — every press is safe.` : '';
+  const runNote = run > 1 ? ` Slide it ${run}× in a row — every move is safe.` : '';
   return `${describeMove(coupling, pos, mv.plate, mv.dir)}.${runNote}`;
 }
 
@@ -1810,6 +1828,8 @@ appEl.addEventListener('click', (e) => {
     case 'plan-skip':
       state.skipPlanKey = state.positions.join(','); // dismiss until positions change
       break;
+    case 'jam-done':
+      break; // jamNotice already cleared above — rows return to the moved? column
     case 'jam-wiggle': {
       // The player saw this plate wiggle on the jam they just reported: linked
       // to the jammed plate for sure. The SIGN is only known when this slide is

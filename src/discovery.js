@@ -106,7 +106,7 @@ export function recommendNext(positions, mapping, blocked = new Set(), softLinks
           dir,
           safe: true,
           reason: atEdge(positions, plate)
-            ? 'On the edge — press toward center to clear it safely.'
+            ? 'On the edge — slide it toward center to clear it safely.'
             : 'Nothing this move can touch is at an edge, so it will go through cleanly.',
         };
       }
@@ -174,13 +174,13 @@ export function recommendNext(positions, mapping, blocked = new Set(), softLinks
       return {
         type: 'plan',
         moves: [{ plate, dir }],
-        reason: 'Every untried press jams here — this known move changes the layout so new presses open up.',
+        reason: 'Every untried move jams here — this known move changes the layout so new ones open up.',
       };
     }
   }
   return {
     type: 'stuck',
-    reason: 'Every untried press jams and no mapped slide can move — reset the pins to start from a known state.',
+    reason: 'Every untried move jams and no mapped slide can move — reset the pins to start from a known state.',
   };
 }
 
