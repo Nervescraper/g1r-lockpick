@@ -26,6 +26,13 @@ export function isSolved(positions) {
   return positions.every((v) => v === GOAL);
 }
 
+// True when no plate sits on an edge (every position is strictly in MIN+1..MAX-1).
+// A successful probe is guaranteed safe in this state, since any unknown ±1 coupling
+// still lands in bounds.
+export function allInterior(positions) {
+  return positions.every((v) => v > MIN && v < MAX);
+}
+
 export function legalMoves(positions, coupling) {
   const out = [];
   for (let plate = 0; plate < positions.length; plate++) {

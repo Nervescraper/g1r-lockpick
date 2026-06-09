@@ -7,6 +7,7 @@ import {
   isLegal,
   isSolved,
   legalMoves,
+  allInterior,
 } from '../src/model.js';
 
 test('dirSign maps L to +1 and R to -1', () => {
@@ -42,6 +43,13 @@ test('isLegal accounts for coupled plates hitting an edge', () => {
 test('isSolved is true only when every pin is at 4', () => {
   assert.equal(isSolved([4, 4]), true);
   assert.equal(isSolved([4, 3]), false);
+});
+
+test('allInterior is true only when every plate is strictly inside the edges', () => {
+  assert.equal(allInterior([2, 4, 6]), true);
+  assert.equal(allInterior([4, 4, 4]), true);
+  assert.equal(allInterior([1, 4]), false); // 1 is the MIN edge
+  assert.equal(allInterior([4, 7]), false); // 7 is the MAX edge
 });
 
 test('legalMoves lists only in-bounds plate/dir combos', () => {
