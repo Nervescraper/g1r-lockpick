@@ -25,10 +25,19 @@ const DIR_WORD = { L: 'Left', R: 'Right' };
 // Bump when a changelog update should re-show the "New" badge on the Changelog
 // button. Leave unchanged for silent edits (typos, rewording) that shouldn't
 // re-notify users who've already seen the latest entries.
-const CHANGELOG_VERSION = '1.2.0';
+const CHANGELOG_VERSION = '1.3.0';
 
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
+  {
+    date: '2026-06-09',
+    items: [
+      'Pressed a plate and it jammed? Click “It jammed” — the app remembers that press fails at those positions (even after a pick break) and guides you to a better one instead of repeating itself.',
+      'When the edges can’t all be cleared with mapped moves, the app now suggests known moves that pull a slide off an edge; if every untried press jams, it offers a layout-changing move rather than leaving you guessing.',
+      '“Edit positions” now only corrects where the slides are. The lock’s reset point stays put, so Reset always lands where the game actually snaps back to.',
+      'Pressing R to reset during mapping now behaves exactly like the Reset button — the move being recorded follows the reset instead of showing stale positions.',
+    ],
+  },
   {
     date: '2026-06-09',
     items: [
