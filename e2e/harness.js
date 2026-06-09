@@ -229,8 +229,10 @@ export class Driver {
   // plate is being recorded and the press direction matches (a player decides,
   // then presses). Required so a jam can be reported against the right press.
   async prepareProbe(plate, dirCode, positionsBefore) {
-    const recordingTxt = (await this.text('.map-wrap .ap-card')) || '';
-    const recMatch = recordingTxt.match(/Recording\s*P(\d+)/);
+    // The instruction line names the plate being recorded ("Press P3 … in the
+    // lock" with suggestions on, "Recording P3 — …" without).
+    const recordingTxt = (await this.text('.map-instruction')) || '';
+    const recMatch = recordingTxt.match(/P(\d+)/);
     const active = recMatch ? +recMatch[1] - 1 : null;
     if (active !== plate) await this.selectPlate(plate);
 
@@ -343,8 +345,8 @@ export class Driver {
       }
 
       // The app's suggested probe (the active recording's plate + direction).
-      const hint = (await this.text('.map-wrap')) || '';
-      const hm = hint.match(/Suggested move: press\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
+      const hint = (await this.text('.map-instruction')) || '';
+      const hm = hint.match(/Press\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
       let choice = null;
       if (hm && !blocked.has(`${posKey}|${+hm[1] - 1}${DIR_CODE[hm[2]]}`)) {
         choice = { plate: +hm[1] - 1, dir: DIR_CODE[hm[2]] };

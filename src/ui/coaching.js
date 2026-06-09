@@ -16,6 +16,5 @@ export function coachingMessage(positions) {
   const edges = edgePlates(positions);
   if (edges.length === 0) return 'No slides on the edges — safe to probe freely.';
   const list = edges.map((e) => `P${e.plate + 1} (pin ${e.pos})`).join(', ');
-  const noun = edges.length === 1 ? 'slide' : 'slides';
-  return `${edges.length} ${noun} on the edge — ${list}. Move these toward center before test-probing others, or a probe may break the pick.`;
+  return `On the edge: ${list} — clear these first, or a probe may snap the pick.`;
 }

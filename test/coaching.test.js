@@ -14,16 +14,16 @@ test('coachingMessage reports the safe state when nothing is on an edge', () => 
   assert.match(coachingMessage([2, 4, 6]), /safe to probe freely/i);
 });
 
-test('coachingMessage names the edge slides and uses singular for one', () => {
+test('coachingMessage names the edge slide and warns about the pick', () => {
   const msg = coachingMessage([4, 7, 4]);
-  assert.match(msg, /1 slide on the edge/i);
+  assert.match(msg, /on the edge/i);
   assert.match(msg, /P2 \(pin 7\)/);
-  assert.match(msg, /toward center/i);
+  assert.match(msg, /pick/i);
 });
 
-test('coachingMessage uses plural and lists all edge slides', () => {
+test('coachingMessage lists all edge slides', () => {
   const msg = coachingMessage([1, 4, 7]);
-  assert.match(msg, /2 slides on the edge/i);
+  assert.match(msg, /on the edge/i);
   assert.match(msg, /P1 \(pin 1\)/);
   assert.match(msg, /P3 \(pin 7\)/);
 });

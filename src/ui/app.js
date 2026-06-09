@@ -205,13 +205,14 @@ const plateLabel = (i) => `P${i + 1}`;
 const shiftWord = (delta) => (delta > 0 ? 'left' : 'right');
 const dirArrow = (dir) => (dir === 'L' ? '◀' : '▶');
 
+// "moves P3 right (2→1) · P5 right (7→6)" — the pressed plate first, coupled
+// plates after it with no repeated lead-in.
 function describeMove(coupling, positions, plate, dir) {
   const d = moveDelta(coupling, plate, dir);
-  const parts = [];
+  const part = (j) => `${plateLabel(j)} ${shiftWord(d[j])} (${positions[j]}→${positions[j] + d[j]})`;
+  const parts = [`moves ${part(plate)}`];
   for (let j = 0; j < d.length; j++) {
-    if (d[j] === 0) continue;
-    const lead = j === plate ? 'shifts' : 'also shifts';
-    parts.push(`${lead} ${plateLabel(j)} ${shiftWord(d[j])} (${positions[j]}→${positions[j] + d[j]})`);
+    if (j !== plate && d[j] !== 0) parts.push(part(j));
   }
   return parts.join(' · ');
 }
@@ -1098,10 +1099,9 @@ function setupPanel() {
 // but never assumed complete — untapped plates teach nothing.
 function jamNoticeHtml(jn) {
   const lead = jn.broke
-    ? `That jam was the pick's <b>second</b> mistake — the pick broke and every slide snapped back to the start.
-       The board has been reset to match; your mapping and jam notes are kept.`
-    : `Noted — <b>${plateLabel(jn.plate)}</b> <span class="dir">${dirArrow(jn.dir)} ${DIR_WORD[jn.dir]}</span>
-       jams at these positions and won't be suggested again here. <b>1 mistake on this pick</b> — another jam breaks it.`;
+    ? `Second mistake — the pick broke and the slides snapped back to the start. Board reset to match; mapping kept.`
+    : `Noted: <b>${plateLabel(jn.plate)}</b> <span class="dir">${dirArrow(jn.dir)} ${DIR_WORD[jn.dir]}</span> jams here —
+       it won't be suggested again. One more jam breaks the pick.`;
   const chips = [];
   for (let j = 0; j < state.n; j++) {
     if (j === jn.plate) continue;
@@ -1112,9 +1112,8 @@ function jamNoticeHtml(jn) {
     chips.push(`<span class="ap-btn${on ? ' primary' : ''}" data-action="jam-wiggle" data-plate="${j}">${plateLabel(j)}</span>`);
   }
   const wiggle = chips.length
-    ? `<div class="muted" style="margin-top:8px">Optional: did you see which slides <i>wiggled</i> on the jam? Tap the ones
-        you saw — each pins down one of ${plateLabel(jn.plate)}'s links (tap again to undo). It's fine to have missed
-        some; only what you tap is used.</div>
+    ? `<div class="muted" style="margin-top:8px">Saw slides <i>wiggle</i>? Tap them — each pins down one of
+        ${plateLabel(jn.plate)}'s links (tap again to undo). Optional; missing some is fine.</div>
        <div style="margin-top:4px">${chips.join(' ')}</div>`
     : '';
   return `<div class="note" style="margin-top:6px">${lead}${wiggle}</div>`;
@@ -1153,23 +1152,23 @@ function mappingView() {
     suggestEnabled() && suggestion && suggestion.type === 'probe' && suggestion.plate !== active
       ? `<div class="muted" style="margin-top:6px">Suggested: <b style="color:var(--gold)">${plateLabel(
           suggestion.plate
-        )}</b> ${suggestion.safe ? '✓ safe to press' : '⚠ may jam at an edge'}
+        )}</b> ${suggestion.safe ? '✓ safe' : '⚠ may jam'}
         <span class="ap-btn" data-action="select-plate" data-plate="${suggestion.plate}" style="margin-left:6px">Select ›</span></div>`
       : '';
-  // Live edge coaching, recomputed from committed positions every render.
-  const coachHtml = done ? '' : `<div class="coach muted" style="margin-top:6px">${coachingMessage(state.positions)}</div>`;
+  // One status line: edge situation, plus pick damage when there is any to
+  // report (a fresh pick with no breaks says nothing).
+  const pickBits = [];
+  if (state.pickMistakes) pickBits.push('<span style="color:var(--danger)">pick: ⚠ 1 mistake — the next jam breaks it</span>');
+  if (state.picksBroken) pickBits.push(`picks broken: ${state.picksBroken}`);
+  const statusHtml = done
+    ? ''
+    : `<div class="coach muted" style="margin-top:6px">${coachingMessage(state.positions)}${
+        pickBits.length ? ' · ' + pickBits.join(' · ') : ''
+      }</div>`;
   // Acknowledgement after "It jammed": confirms the press is remembered, reports
   // what it cost the pick, and offers the optional wiggle capture. Cleared on
   // the next click that isn't part of the jam flow.
   const jamHtml = state.jamNotice ? jamNoticeHtml(state.jamNotice) : '';
-  // Standing pick-damage line, so the stakes of the next probe are always visible.
-  const pickHtml = done
-    ? ''
-    : `<div class="muted" style="margin-top:6px">Pick: ${
-        state.pickMistakes
-          ? '<span style="color:var(--danger)">⚠ 1 mistake — another jam breaks it</span>'
-          : 'no mistakes yet'
-      }${state.picksBroken ? ` · ${state.picksBroken} broken so far` : ''}</div>`;
   // Tier 4: the player has reported every viable press as jammed at these positions.
   const stuckHtml =
     suggestEnabled() && suggestion && suggestion.type === 'stuck'
@@ -1190,27 +1189,27 @@ function mappingView() {
         <span class="ap-btn" data-action="plan-skip">Skip</span>
        </div>`
     : '';
-  const headBody = isActive
-    ? `<div class="muted">For <b style="color:var(--gold)">${plateLabel(active)}</b>: press it in game, then mark how each
-        <i>other</i> plate moves — <span style="color:var(--goal)">Moves with</span> = same direction,
-        <span style="color:var(--danger)">Moves opposite</span> = the other way.</div>
-       <div style="margin-top:6px;font-size:14px;color:#fff">Recording <b style="color:var(--gold)">${plateLabel(active)}</b></div>`
-    : `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`;
-  // The suggested press for the active plate, stated explicitly (direction follows the
-  // recording's live deltaI). The board previews it as a ghost → solid move.
-  const moveHintHtml = suggestEnabled() && isActive && state.rec
-    ? `<div style="margin-top:6px;font-size:14px;color:#fff">Suggested move: press <b style="color:var(--gold)">${plateLabel(active)}</b>
-        <span class="dir">${dirArrow(activeDir)} ${DIR_WORD[activeDir]}</span> — do it in the lock, then record what moved.</div>`
-    : '';
+  // One instruction line carries the whole loop: which plate, which press (when
+  // suggestions are on; direction follows the recording's live deltaI), and how
+  // to record the result. The board previews the press as a ghost → solid move.
+  const instructionHtml = !isActive
+    ? `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`
+    : suggestEnabled() && state.rec
+    ? `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Press <b style="color:var(--gold)">${plateLabel(active)}</b>
+        <span class="dir">${dirArrow(activeDir)} ${DIR_WORD[activeDir]}</span> in the lock, then mark what moved —
+        <span style="color:var(--goal)">Moves with</span> = same way, <span style="color:var(--danger)">Moves opposite</span> = the other.</div>`
+    : `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Recording <b style="color:var(--gold)">${plateLabel(active)}</b> —
+        press it one slot in the lock, then mark what moved
+        (<span style="color:var(--goal)">Moves with</span> / <span style="color:var(--danger)">Moves opposite</span>).</div>`;
   // Legend explaining the ghost, shown only while a previewed move is on the board.
   const ghostLegendHtml = hasGhost
-    ? `<div class="muted" style="margin-top:4px;font-size:12px">On the board, the <b style="color:var(--gold);font-weight:600">dashed</b> slide marks where a plate is <i>now</i>; the solid slide is where the press lands.</div>`
+    ? `<div class="muted" style="margin-top:4px;font-size:12px"><b style="color:var(--gold);font-weight:600">Dashed</b> = where the slide is now · solid = where the press lands.</div>`
     : '';
   const title = done ? `Map the lock · all ${m.n} mapped ✓` : `Map the lock · ${mapped} of ${m.n} mapped`;
   // Per-user toggle: off hides the app's move guidance (preview, suggested-press text,
   // recommended-plate jump, Done/Skip plan) but keeps the edge/jam warning.
   const suggestToggleHtml = `<label class="ap-kbd" style="margin-top:4px"><input type="checkbox" data-action="toggle-suggest"${suggestEnabled() ? ' checked' : ''}> Suggest moves</label>`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${headBody}${moveHintHtml}${coachHtml}${pickHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${instructionHtml}${statusHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
   col.appendChild(head);
 
   const boardHost = document.createElement('div');
@@ -1233,13 +1232,13 @@ function mappingView() {
   const canReset = !done && !!state.initial && state.positions.join(',') !== state.initial.join(',');
   if (knownMoves.length || canReset) {
     const movesBlock = knownMoves.length
-      ? `<div class="muted" style="margin:2px 0 8px;font-size:12px">Reposition with moves you've already mapped (do these in the lock too) — e.g. to pull a slide off an edge before mapping it.</div>
+      ? `<div class="muted" style="margin:2px 0 8px;font-size:12px">Reposition with mapped moves (press them in the lock too) — e.g. to pull a slide off an edge.</div>
          <div class="ms-btns">${knownMoves
            .map((mv) => `<span class="ap-btn" data-action="apply-move" data-plate="${mv.plate}" data-dir="${mv.dir}">${plateLabel(mv.plate)} <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span></span>`)
            .join('')}</div>`
       : '';
     const resetBlock = canReset
-      ? `<div class="muted" style="margin:${knownMoves.length ? '12' : '2'}px 0 6px;font-size:12px">If the pick breaks, every slide snaps back to the start — reset here to match the lock (your mapping is kept).</div>
+      ? `<div class="muted" style="margin:${knownMoves.length ? '12' : '2'}px 0 6px;font-size:12px">Pick broke? Reset snaps the board back to the start to match the lock (mapping kept).</div>
          <span class="ap-btn" data-action="reset-pins">Reset</span>`
       : '';
     const moveCard = document.createElement('div');
@@ -1262,12 +1261,9 @@ function mappingView() {
   foot.className = 'ap-card';
   const recInvalid = isActive && !!state.rec && !validRecording(state.rec);
   const saveBlock = isActive
-    ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge. A successful press can't do that — it's a jam. Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
+    ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge — a real press can't do that (it would jam). Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
        <span class="ap-btn" data-action="probe-jammed" title="The press was blocked at an edge — nothing moved. Tells the app so it stops suggesting this press here.">It jammed ⚠</span>
-       <div class="muted" style="margin-top:8px">Saved plates turn <span style="color:var(--goal)">green</span>.</div>
-       <div class="note" style="margin-top:10px">If pressing a plate jams at an edge, you won't see its real connections — click
-         <b>It jammed</b> so the app stops suggesting that press, then press the other direction or move the
-         offending plate toward center first.</div>`
+       <div class="muted" style="margin-top:8px">Press blocked instead? Click <b>It jammed</b> — a jam shows no links, and the app will steer around it.</div>`
     : '';
   const solveBlock = done
     ? `<div style="${isActive ? 'margin-top:12px' : ''}"><span class="ap-btn primary" data-action="goto-solve">Solve ›</span></div>`
@@ -1324,8 +1320,9 @@ function runLengthAt(i) {
 function moveSubText(coupling, pos, i) {
   const mv = state.plan[i];
   const run = runLengthAt(i);
-  const runNote = run > 1 ? ` Press it ${run}× in a row — every press in the run is safe.` : '';
-  return `${describeMove(coupling, pos, mv.plate, mv.dir)}. No plate hits an edge.${runNote}`;
+  // The ✓ safe badge already says no plate hits an edge — don't repeat it here.
+  const runNote = run > 1 ? ` Press it ${run}× in a row — every press is safe.` : '';
+  return `${describeMove(coupling, pos, mv.plate, mv.dir)}.${runNote}`;
 }
 
 // Positions are derived from the fixed plan: start + the first `planIndex` moves.

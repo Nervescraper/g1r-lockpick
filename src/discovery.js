@@ -119,7 +119,7 @@ export function recommendNext(positions, mapping, blocked = new Set()) {
     return {
       type: 'plan',
       moves,
-      reason: 'Clear the edges first with these known moves, then the next probe is safe.',
+      reason: 'Clear the edges with these known moves — then probing is safe.',
     };
   }
 
@@ -130,7 +130,7 @@ export function recommendNext(positions, mapping, blocked = new Set()) {
     return {
       type: 'plan',
       moves: reduce,
-      reason: 'No safe probe, and the edges can’t all be cleared with known moves yet — these pull a slide off an edge so the next probe risks less.',
+      reason: 'A full edge-clear isn’t possible yet — these known moves pull a slide off an edge, so the next probe risks less.',
     };
   }
 
@@ -156,13 +156,13 @@ export function recommendNext(positions, mapping, blocked = new Set()) {
       return {
         type: 'plan',
         moves: [{ plate, dir }],
-        reason: 'Every untried press jams at these positions — this known move changes the layout so new presses open up.',
+        reason: 'Every untried press jams here — this known move changes the layout so new presses open up.',
       };
     }
   }
   return {
     type: 'stuck',
-    reason: 'Every untried press jams at these positions and no mapped slide can move — reset the pins to start from a known state.',
+    reason: 'Every untried press jams and no mapped slide can move — reset the pins to start from a known state.',
   };
 }
 
