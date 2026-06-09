@@ -43,6 +43,16 @@ export function createBoard(host, s) {
 
     const { startCol, pinCol } = slideCols(s.positions[i]);
 
+    // Ghost slide: a faint marker of where this plate currently is, drawn behind the
+    // solid slide when the in-progress recording has moved it (caller passes `ghosts`).
+    // It makes a previewed press read as "from → to" rather than a committed position.
+    if (s.ghosts && s.ghosts[i] != null && s.ghosts[i] !== s.positions[i]) {
+      const ghost = document.createElement('div');
+      ghost.className = 'tp-tray ghost';
+      ghost.style.gridColumn = `${slideCols(s.ghosts[i]).startCol} / span 7`;
+      field.appendChild(ghost);
+    }
+
     const tray = document.createElement('div');
     tray.className = 'tp-tray';
     if (s.highlightPlate === i) tray.classList.add(s.highlightKind === 'next' ? 'next' : 'sel');

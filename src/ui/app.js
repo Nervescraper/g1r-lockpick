@@ -1047,6 +1047,18 @@ function mappingView() {
 
   const isActive = active != null;
   const done = allMapped(m);
+
+  // Board data derived from the in-progress recording: the solid slide sits at the
+  // tentative landing (positionsOf), a faint ghost marks each moved plate's start, and
+  // moved plates get a "start → landing" label — so a previewed press never looks
+  // committed (you can always see where each slide actually is).
+  const boardPositions = state.rec ? positionsOf(state.rec) : state.positions;
+  const ghosts = state.rec
+    ? boardPositions.map((p, i) => (p !== state.rec.baseline[i] ? state.rec.baseline[i] : null))
+    : null;
+  const hasGhost = !!ghosts && ghosts.some((g) => g != null);
+  const activeDir = isActive && state.rec ? (state.rec.deltaI === 1 ? 'L' : 'R') : null;
+
   const head = document.createElement('div');
   head.className = 'ap-card';
   const suggestHtml =
@@ -1079,8 +1091,18 @@ function mappingView() {
         <span style="color:var(--danger)">Moves opposite</span> = the other way.</div>
        <div style="margin-top:6px;font-size:14px;color:#fff">Recording <b style="color:var(--gold)">${plateLabel(active)}</b></div>`
     : `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`;
+  // The suggested press for the active plate, stated explicitly (direction follows the
+  // recording's live deltaI). The board previews it as a ghost → solid move.
+  const moveHintHtml = isActive && state.rec
+    ? `<div style="margin-top:6px;font-size:14px;color:#fff">Suggested move: press <b style="color:var(--gold)">${plateLabel(active)}</b>
+        <span class="dir">${dirArrow(activeDir)} ${DIR_WORD[activeDir]}</span> — do it in the lock, then record what moved.</div>`
+    : '';
+  // Legend explaining the ghost, shown only while a previewed move is on the board.
+  const ghostLegendHtml = hasGhost
+    ? `<div class="muted" style="margin-top:4px;font-size:12px">On the board, the <b style="color:var(--gold);font-weight:600">dashed</b> slide marks where a plate is <i>now</i>; the solid slide is where the press lands.</div>`
+    : '';
   const title = done ? `Map the lock · all ${m.n} mapped ✓` : `Map the lock · ${mapped} of ${m.n} mapped`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${headBody}${coachHtml}${suggestHtml}${planHtml}`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${headBody}${moveHintHtml}${coachHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
   col.appendChild(head);
 
   const boardHost = document.createElement('div');
@@ -1111,13 +1133,16 @@ function mappingView() {
   foot.innerHTML = saveBlock + solveBlock;
   col.appendChild(foot);
 
-  // While recording, the board shows the tentative live positions (baseline + the press
-  // and its coupled shifts); committed positions are unchanged until Save.
-  const boardPositions = state.rec ? positionsOf(state.rec) : state.positions;
-  // labels go green once a plate is saved
-  const labels = boardPositions.map((p, i) => `<b${m.status[i] === 'done' ? ' class="done"' : ''}>P${i + 1}</b> · ${p}`);
+  // Labels go green once a plate is saved, and show the move as "start → landing" for
+  // any plate the in-progress recording shifts (matching the board's ghost → solid).
+  const labels = boardPositions.map((p, i) => {
+    const moved = state.rec && p !== state.rec.baseline[i];
+    const val = moved ? `${state.rec.baseline[i]} → ${p}` : `${p}`;
+    return `<b${m.status[i] === 'done' ? ' class="done"' : ''}>P${i + 1}</b> · ${val}`;
+  });
   createBoard(boardHost, {
     positions: boardPositions,
+    ghosts,
     selectable: true,
     draggable: active != null,
     onSetPosition: onMapDrag,
