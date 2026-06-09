@@ -53,3 +53,43 @@ export function couplingRow(rec) {
   }
   return row;
 }
+
+// Set/flip the active plate's press direction (a press is always ±1). A negative argument
+// sets Right (-1); any non-negative value (including 0) sets Left (+1).
+export function setActiveDir(rec, deltaI) {
+  return { ...rec, deltaI: deltaI < 0 ? -1 : 1 };
+}
+
+// Click a with/opposite button: set it, switch to the other kind, or clear it.
+export function toggleTag(rec, j, kind) {
+  if (j === rec.active) return rec; // the active plate is never tagged
+  const tags = { ...rec.tags };
+  if (tags[j] === kind) delete tags[j];
+  else tags[j] = kind;
+  return { ...rec, tags };
+}
+
+// Drag the active plate one slot: the sign of the displacement is the press direction.
+// Dragging back onto baseline leaves the direction unchanged.
+export function dragActive(rec, pos) {
+  const d = clampStep(rec.baseline[rec.active], pos) - rec.baseline[rec.active];
+  if (d === 0) return rec;
+  return setActiveDir(rec, d);
+}
+
+// Drag another plate one slot: a step matching the active direction tags it `with`,
+// an opposing step tags it `opposite`, returning to baseline clears the tag.
+export function dragOther(rec, j, pos) {
+  if (j === rec.active) return rec; // the active plate is dragged via dragActive, never tagged
+  const d = clampStep(rec.baseline[j], pos) - rec.baseline[j];
+  const tags = { ...rec.tags };
+  if (d === 0) delete tags[j];
+  else tags[j] = d === rec.deltaI ? 'with' : 'opposite';
+  return { ...rec, tags };
+}
+
+// A successful probe can never push a plate off the board — every derived position must
+// stay in 1..7. (The ±1 clamp already prevents over-large steps; this guards the edge.)
+export function validRecording(rec) {
+  return positionsOf(rec).every((v) => v >= MIN && v <= MAX);
+}
