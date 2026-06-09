@@ -1056,6 +1056,23 @@ function mappingView() {
         )}</b> ${suggestion.safe ? '✓ safe to press' : '⚠ may jam at an edge'}
         <span class="ap-btn" data-action="select-plate" data-plate="${suggestion.plate}" style="margin-left:6px">Select ›</span></div>`
       : '';
+  // Live edge coaching, recomputed from committed positions every render.
+  const coachHtml = done ? '' : `<div class="coach muted" style="margin-top:6px">${coachingMessage(state.positions)}</div>`;
+  // The edge-clearing plan (tier 2 of recommendNext), rendered as a Done/Skip panel.
+  // A Skip is remembered against the current positions so it stays dismissed until the
+  // board changes (Save, or a Done'd move); any position change re-offers it.
+  const planPending =
+    suggestion && suggestion.type === 'plan' && state.skipPlanKey !== state.positions.join(',');
+  const planHtml = planPending
+    ? `<div class="plan-suggest" style="margin-top:6px">
+        <div class="muted">${suggestion.reason}</div>
+        <div style="margin:4px 0;color:#fff">${suggestion.moves
+          .map((mv) => `${plateLabel(mv.plate)} <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span>`)
+          .join(' · ')}</div>
+        <span class="ap-btn primary" data-action="plan-done">Done ›</span>
+        <span class="ap-btn" data-action="plan-skip">Skip</span>
+       </div>`
+    : '';
   const headBody = isActive
     ? `<div class="muted">For <b style="color:var(--gold)">${plateLabel(active)}</b>: press it in game, then mark how each
         <i>other</i> plate moves — <span style="color:var(--goal)">Moves with</span> = same direction,
@@ -1063,7 +1080,7 @@ function mappingView() {
        <div style="margin-top:6px;font-size:14px;color:#fff">Recording <b style="color:var(--gold)">${plateLabel(active)}</b></div>`
     : `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`;
   const title = done ? `Map the lock · all ${m.n} mapped ✓` : `Map the lock · ${mapped} of ${m.n} mapped`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${headBody}${suggestHtml}`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${headBody}${coachHtml}${suggestHtml}${planHtml}`;
   col.appendChild(head);
 
   const boardHost = document.createElement('div');
@@ -1487,6 +1504,20 @@ appEl.addEventListener('click', (e) => {
       if (state.rec) state.rec = toggleTag(state.rec, +t.dataset.plate, t.dataset.rel);
       break;
     case 'save-next': saveActivePlate(); break;
+
+    case 'plan-done': {
+      // Apply the known edge-clearing sequence to the live positions, then re-seed.
+      const rec = allMapped(state.mapping) ? null : recommendNext(state.positions, state.mapping);
+      if (rec && rec.type === 'plan') {
+        state.positions = applySequence(state.positions, state.mapping.coupling, rec.moves);
+        state.skipPlanKey = undefined; // positions changed; future plans are fresh
+        suggestDefault();
+      }
+      break;
+    }
+    case 'plan-skip':
+      state.skipPlanKey = state.positions.join(','); // dismiss until positions change
+      break;
 
     case 'did-it':
       if (state.plan && state.planIndex < state.plan.length) {
