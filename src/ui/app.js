@@ -34,6 +34,8 @@ const CHANGELOG = [
     items: [
       'Pressed a plate and it jammed? Click “It jammed” — the app remembers that press fails at those positions (even after a pick break) and guides you to a better one instead of repeating itself.',
       'The app now tracks your pick like the game does: the first jam is a warning, the second breaks the pick — and the board resets itself to the start to match the snapped-back slides.',
+      'Saw slides wiggle when it jammed? Tap them on the jam note (optional) — each one pins down a link and rules out presses that would jam the same way. Missing some is fine.',
+      'Long stretches of the same press now step as one: the Next move card reads e.g. “P2 ▶ Right ×6” with a “Did all 6” button, so a 68-press solution takes ~20 clicks instead of 68.',
       'When the edges can’t all be cleared with mapped moves, the app now suggests known moves that pull a slide off an edge; if every untried press jams, it offers a layout-changing move rather than leaving you guessing.',
       '“Edit positions” now only corrects where the slides are. The lock’s reset point stays put, so Reset always lands where the game actually snaps back to.',
       'Pressing R to reset during mapping now behaves exactly like the Reset button — the move being recorded follows the reset instead of showing stale positions.',
