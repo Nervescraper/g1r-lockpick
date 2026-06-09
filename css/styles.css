@@ -338,6 +338,7 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .tp-2dright { margin-left: auto; flex: 0 0 auto; }
 .map-wrap { max-width: 720px; margin: 0 auto; }
 
+.ms-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .rel { display: flex; gap: 6px; }
 .rel-btn { font-size: 11px; padding: 5px 10px; border: 1px solid #333; border-radius: 6px; color: #999; cursor: pointer; white-space: nowrap; }
 .rel-btn:hover { border-color: #555; }

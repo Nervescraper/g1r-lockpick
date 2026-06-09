@@ -1,6 +1,6 @@
 import { createBoard } from './board.js';
 import { nextActivePlate } from './active-plate.js';
-import { applyMove, moveDelta, isSolved, GOAL } from '../model.js';
+import { applyMove, moveDelta, isSolved, isLegal, GOAL } from '../model.js';
 import { solve, applySequence } from '../solver.js';
 import {
   createRecording, tagOf, positionsOf, couplingRow,
@@ -1120,6 +1120,30 @@ function mappingView() {
   const boardHost = document.createElement('div');
   col.appendChild(boardHost);
 
+  // Manual reposition: apply a known move (a press of an already-mapped plate) to the live
+  // positions — e.g. to pull a slide off an edge before mapping it. Only legal (in-bounds)
+  // presses of mapped plates (whose full coupling is known) are offered. Always available,
+  // independent of the Suggest-moves toggle and the auto edge-clearing plan.
+  const knownMoves = [];
+  if (!done) {
+    for (let i = 0; i < m.n; i++) {
+      if (m.status[i] !== 'done') continue;
+      for (const dir of ['L', 'R']) {
+        if (isLegal(state.positions, m.coupling, i, dir)) knownMoves.push({ plate: i, dir });
+      }
+    }
+  }
+  if (knownMoves.length) {
+    const moveCard = document.createElement('div');
+    moveCard.className = 'ap-card';
+    moveCard.innerHTML = `<div class="ap-h">Move slides — apply a known move</div>
+      <div class="muted" style="margin:2px 0 8px;font-size:12px">Reposition with moves you've already mapped (do these in the lock too) — e.g. to pull a slide off an edge before mapping it.</div>
+      <div class="ms-btns">${knownMoves
+        .map((mv) => `<span class="ap-btn" data-action="apply-move" data-plate="${mv.plate}" data-dir="${mv.dir}">${plateLabel(mv.plate)} <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span></span>`)
+        .join('')}</div>`;
+    col.appendChild(moveCard);
+  }
+
   const rowsRight = state.positions.map((_, i) => {
     if (i === active) return `<span class="self-note">the plate you're moving</span>`;
     if (active == null) return '';
@@ -1555,6 +1579,21 @@ appEl.addEventListener('click', (e) => {
     case 'plan-skip':
       state.skipPlanKey = state.positions.join(','); // dismiss until positions change
       break;
+    case 'apply-move': {
+      // Manually apply a known move (press of a mapped plate) to reposition the slides.
+      const plate = +t.dataset.plate;
+      const dir = t.dataset.dir;
+      if (state.mapping.status[plate] === 'done' && isLegal(state.positions, state.mapping.coupling, plate, dir)) {
+        state.positions = applyMove(state.positions, state.mapping.coupling, plate, dir);
+        state.skipPlanKey = undefined; // positions changed → re-offer any edge plan
+        if (state.activePlate != null) {
+          // re-base the in-progress recording against the new positions
+          state.rec = createRecording(state.positions, state.activePlate, relFromMapping(state.activePlate));
+          state.recTouched = false;
+        }
+      }
+      break;
+    }
 
     case 'did-it':
       if (state.plan && state.planIndex < state.plan.length) {
