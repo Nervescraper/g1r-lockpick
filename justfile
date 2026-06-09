@@ -13,3 +13,10 @@ publish: build
 # Run the test suite
 test:
     node --test
+
+# Fixture sanity checks (no browser), then the full end-to-end suite
+e2e:
+    node e2e/preflight.js
+    node e2e/strategy-sim.js
+    node e2e/run.js
+    node e2e/explore.js
