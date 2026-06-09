@@ -434,8 +434,9 @@ function reserveMoveDescHeight() {
   const original = sub.textContent;
   let pos = state.solveStart.slice();
   let max = 0;
-  for (const mv of state.plan) {
-    sub.textContent = `${describeMove(coupling, pos, mv.plate, mv.dir)}. No plate hits an edge.`;
+  for (let i = 0; i < state.plan.length; i++) {
+    const mv = state.plan[i];
+    sub.textContent = moveSubText(coupling, pos, i);
     if (sub.offsetHeight > max) max = sub.offsetHeight;
     pos = applyMove(pos, coupling, mv.plate, mv.dir);
   }
@@ -1278,6 +1279,30 @@ function initSolve() {
   state.planIndex = 0;
 }
 
+// Length of the run of identical moves (same plate, same direction) starting at
+// plan index i. In the game these are pressed in one sitting, so the solve view
+// presents them as a single "press it ×N" instruction.
+function runLengthAt(i) {
+  const mv = state.plan[i];
+  let run = 1;
+  while (i + run < state.plan.length) {
+    const nx = state.plan[i + run];
+    if (nx.plate !== mv.plate || nx.dir !== mv.dir) break;
+    run++;
+  }
+  return run;
+}
+
+// The "Next move" card's description for plan index i from positions `pos` —
+// shared with reserveMoveDescHeight so the reserved height accounts for the
+// run note exactly as rendered.
+function moveSubText(coupling, pos, i) {
+  const mv = state.plan[i];
+  const run = runLengthAt(i);
+  const runNote = run > 1 ? ` Press it ${run}× in a row — every press in the run is safe.` : '';
+  return `${describeMove(coupling, pos, mv.plate, mv.dir)}. No plate hits an edge.${runNote}`;
+}
+
 // Positions are derived from the fixed plan: start + the first `planIndex` moves.
 function computeSolvePositions() {
   let p = state.solveStart.slice();
@@ -1524,15 +1549,24 @@ function solvePanel(side, boardProps) {
   boardProps.highlightPlate = next.plate;
   boardProps.highlightKind = 'next';
 
+  // Identical consecutive moves render as one instruction: in the game you keep
+  // the plate selected and press the same direction N times, so the primary
+  // button advances the whole run (single-step stays available).
+  const run = runLengthAt(state.planIndex);
+  const doneBtns = run > 1
+    ? `<span class="ap-btn primary" data-action="did-run" data-count="${run}">Did all ${run} ›</span>
+       <span class="ap-btn" data-action="did-it">Did 1 ›</span>`
+    : `<span class="ap-btn primary" data-action="did-it">Did it ›</span>`;
   const nextCard = document.createElement('div');
   nextCard.className = 'ap-card';
   nextCard.innerHTML = `
     <div class="ap-nm-label">Next move · ${remaining} left</div>
-    <div class="ap-nm">${plateLabel(next.plate)} <span class="dir">${dirArrow(next.dir)} ${DIR_WORD[next.dir]}</span>
-      <span class="badge safe">✓ safe</span></div>
-    <div class="ap-nm-sub">${describeMove(coupling, state.positions, next.plate, next.dir)}. No plate hits an edge.</div>
+    <div class="ap-nm">${plateLabel(next.plate)} <span class="dir">${dirArrow(next.dir)} ${DIR_WORD[next.dir]}</span>${
+      run > 1 ? ` <span class="dir">×${run}</span>` : ''
+    } <span class="badge safe">✓ safe</span></div>
+    <div class="ap-nm-sub">${moveSubText(coupling, state.positions, state.planIndex)}</div>
     <div style="margin-top:12px">
-      <span class="ap-btn primary" data-action="did-it">Did it ›</span>
+      ${doneBtns}
       <span class="ap-btn" data-action="reset-pins">Reset pins${isNarrowViewport() ? '' : ' (R)'}</span>
       <span class="ap-btn" data-action="edit-positions">Edit positions</span>
     </div>`;
@@ -1712,6 +1746,14 @@ appEl.addEventListener('click', (e) => {
     case 'did-it':
       if (state.plan && state.planIndex < state.plan.length) {
         state.planIndex++;
+        state.positions = computeSolvePositions();
+      }
+      break;
+    case 'did-run':
+      // Advance through the whole same-plate run at once (the player pressed it
+      // N times in the game).
+      if (state.plan && state.planIndex < state.plan.length) {
+        state.planIndex = Math.min(state.plan.length, state.planIndex + (+t.dataset.count || 1));
         state.positions = computeSolvePositions();
       }
       break;

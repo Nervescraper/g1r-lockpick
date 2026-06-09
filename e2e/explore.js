@@ -270,7 +270,64 @@ try {
     await d.shot('after-mapping-r');
   });
 
-  // 6 · Save / Start over / load roundtrip.
+  // 6 · Import a fully-mapped real lock by share code, then solve its 68-move
+  // plan with the run-grouped "Did all N" buttons — far fewer advances than
+  // one click per press, with the board verified against the lock throughout.
+  await scenario(browser, 'import-run-groups', { width: 1280, height: 800 }, async (d, page) => {
+    const gomez = EXPLORE_LOCKS.find((l) => l.id === 'gomez');
+    d.lock = gomez;
+    d.game = new (d.game.constructor)(gomez);
+    await d.gotoFreshApp(BASE_URL);
+
+    const payload = {
+      format: 'g1r-locks',
+      version: 1,
+      exportedAt: '2026-06-09T00:00:00.000Z',
+      locks: [{
+        id: 'lock-gomez-e2e',
+        name: 'Old Camp Castle · Chest · Gomez e2e',
+        location: 'Old Camp Castle',
+        kind: 'Chest',
+        description: 'Gomez e2e',
+        n: gomez.n,
+        initial: gomez.initial,
+        coupling: gomez.coupling,
+        status: Array(gomez.n).fill('done'),
+        contents: [],
+        notes: '',
+        updatedAt: 1781038069717,
+      }],
+    };
+    const code = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
+    await d.click('import-open');
+    await page.fill('[data-action="import-text"]', code);
+    await d.click('import-parse');
+    await d.click('import-done');
+    await page.click('[data-action="load-lock"][data-id="lock-gomez-e2e"]');
+    await page.waitForSelector('.ap-nm');
+    await d.shot('run-group-card');
+
+    let advances = 0;
+    for (let guard = 0; guard < 40 && !(await page.$('.success')); guard++) {
+      const nm = await d.text('.ap-nm');
+      const m = nm && nm.match(/P(\d+)\s*[◀▶]\s*(Left|Right)(?:\s*×(\d+))?/);
+      if (!m) { d.issue('ui', `unreadable next move "${nm}"`); return; }
+      const count = m[3] ? +m[3] : 1;
+      for (let k = 0; k < count; k++) {
+        const r = d.game.press(+m[1] - 1, m[2] === 'Left' ? 'L' : 'R');
+        if (r.blocked) { d.issue('solver', 'a move inside a suggested run blocked the lock'); return; }
+      }
+      await page.click(count > 1 ? '[data-action="did-run"]' : '[data-action="did-it"]');
+      advances++;
+      await d.expectBoardMatchesGame(`after grouped advance ${advances}`);
+    }
+    if (!(await page.$('.success'))) { d.issue('ui', 'run-grouped solve never reached Lock open'); return; }
+    if (!d.game.isSolved()) { d.issue('drift', `app shows open but the lock is at [${d.game.positions}]`); return; }
+    d.observe(`68-press plan executed in ${advances} grouped advances`);
+    await d.shot('run-groups-done');
+  });
+
+  // 7 · Save / Start over / load roundtrip.
   await scenario(browser, 'save-load', { width: 1280, height: 800 }, async (d, page) => {
     d.lock = LOCKS[0];
     d.game = new (d.game.constructor)(d.lock);
