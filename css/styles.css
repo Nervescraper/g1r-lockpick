@@ -344,9 +344,10 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .ms-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* ---- mapping ledger: per-row symbol buttons under labeled column headers.
-   Column widths live in vars so the header line and every row stay aligned;
+   Column widths live in vars so the header line and every row stay aligned —
+   defined on .map-wrap because the header sits OUTSIDE the board element;
    the phone breakpoint shrinks them and hides the in-button words. ---- */
-.tp-2d { --led-tag: 158px; --led-move: 62px; }
+.map-wrap { --led-tag: 158px; --led-move: 62px; }
 .ledger-head { display: flex; justify-content: flex-end; gap: 8px; max-width: 640px; margin: 0 auto -2px; }
 .ledger-head span { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #776f5e; text-align: center; }
 .ledger-head .lh-tag { width: var(--led-tag); }
@@ -362,7 +363,7 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .led-btn.on-wig { color: var(--gold); border-color: #6b5a2b; }
 .led-btn.dis { opacity: 0.25; cursor: default; pointer-events: none; }
 @media (max-width: 560px) {
-  .tp-2d { --led-tag: 62px; --led-move: 58px; }
+  .map-wrap { --led-tag: 62px; --led-move: 58px; }
   .led-btn .led-word { display: none; }
   .led-btn { padding: 3px 7px; }
 }
