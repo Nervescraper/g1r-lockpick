@@ -1192,7 +1192,7 @@ function mappingView() {
   // any plate the in-progress recording shifts (matching the board's ghost → solid).
   const labels = boardPositions.map((p, i) => {
     const moved = previewing && p !== state.rec.baseline[i];
-    const val = moved ? `${state.rec.baseline[i]} → ${p}` : `${p}`;
+    const val = moved ? `${state.rec.baseline[i]}→${p}` : `${p}`;
     return `<b${m.status[i] === 'done' ? ' class="done"' : ''}>P${i + 1}</b> · ${val}`;
   });
   createBoard(boardHost, {
