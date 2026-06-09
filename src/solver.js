@@ -107,6 +107,15 @@ function reconstruct(parent, goalKey, startKey) {
   return moves.reverse();
 }
 
+// Advance positions through a known move sequence (each move is a press of a plate
+// whose coupling row is already mapped). Returns a fresh positions array; the input
+// is not mutated. The Done button uses this to apply an edge-clearing plan at once.
+export function applySequence(positions, coupling, moves) {
+  let p = positions.slice();
+  for (const mv of moves) p = applyMove(p, coupling, mv.plate, mv.dir);
+  return p;
+}
+
 // Breadth-first search for a shortest sequence of moves on already-mapped (`done`)
 // plates that drives every plate off the edges (all-interior). Only legal moves are
 // expanded, so a returned plan never strands a plate on an edge — directly avoiding

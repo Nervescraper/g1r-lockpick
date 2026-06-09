@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { solve, countSwitches, planEdgeClear } from '../src/solver.js';
+import { solve, countSwitches, planEdgeClear, applySequence } from '../src/solver.js';
 import { applyMove, isSolved, legalMoves, MIN, MAX } from '../src/model.js';
 
 // helper: replay a solution, asserting every step stays in 1..7
@@ -349,4 +349,22 @@ test('planEdgeClear finds a multi-step sequence (no single move clears both edge
   // both plates at the MIN edge, independent self-moves: needs one Left press each.
   const plan = planEdgeClear([1, 1], [[1, 0], [0, 1]], [0, 1]);
   assert.deepEqual(plan, [{ plate: 0, dir: 'L' }, { plate: 1, dir: 'L' }]);
+});
+
+test('applySequence returns a copy of positions for an empty move list', () => {
+  const start = [4, 4];
+  const out = applySequence(start, [[1, 0], [0, 1]], []);
+  assert.deepEqual(out, [4, 4]);
+  assert.notEqual(out, start); // a fresh array, not the input
+});
+
+test('applySequence applies one known self-move', () => {
+  // plate 1 moves only itself; pressing it Left adds +1 to position 1.
+  assert.deepEqual(applySequence([4, 1], [[1, 0], [0, 1]], [{ plate: 1, dir: 'L' }]), [4, 2]);
+});
+
+test('applySequence applies a multi-step sequence in order', () => {
+  // both plates self-moving; one Left press each clears both MIN edges to interior.
+  const out = applySequence([1, 1], [[1, 0], [0, 1]], [{ plate: 0, dir: 'L' }, { plate: 1, dir: 'L' }]);
+  assert.deepEqual(out, [2, 2]);
 });
