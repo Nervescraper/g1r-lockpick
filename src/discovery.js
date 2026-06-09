@@ -58,7 +58,11 @@ function atEdge(positions, i) {
 // `blocked` holds presses the player reported as jamming at the CURRENT
 // positions, as "plate|dir" strings — those are never suggested again until the
 // positions change (the caller keys its memory by position).
-export function recommendNext(positions, mapping, blocked = new Set()) {
+// `softLinks` holds "i|j" pairs known to be linked with UNKNOWN sign (a slide
+// seen wiggling on one of plate i's jams). They can't rule a press out — the
+// link may move the slide inward — but they raise its risk: a soft link to an
+// edge slide is a coin flip, worse than a fully unknown cell.
+export function recommendNext(positions, mapping, blocked = new Set(), softLinks = new Set()) {
   const candidates = [];
   for (let i = 0; i < mapping.n; i++) {
     if (mapping.status[i] !== 'done') candidates.push(i);
@@ -134,18 +138,32 @@ export function recommendNext(positions, mapping, blocked = new Set()) {
     };
   }
 
-  // 3) least-risky probe (no guaranteed-safe option, no clearing plan yet)
+  // 3) least-risky probe (no guaranteed-safe option, no clearing plan yet).
+  // Risk of a press = the chance some OTHER edge slide gets pushed past its
+  // edge: a known cell contributes nothing (pressable already removed certain
+  // jams, so it moves inward), a soft link 1/2, a fully unknown cell 1/3.
+  // Candidates were sorted above, so the first minimum keeps that tie-break.
+  let least = null;
   for (const plate of candidates) {
     for (const dir of preferredDirs(positions, plate)) {
       if (!pressable(plate, dir)) continue;
-      return {
-        type: 'probe',
-        plate,
-        dir,
-        safe: false,
-        reason: 'No fully safe probe yet — some plates are at an edge. This is the least-risky option.',
-      };
+      let risk = 0;
+      for (let j = 0; j < mapping.n; j++) {
+        if (j === plate || (positions[j] > MIN && positions[j] < MAX)) continue;
+        if (mapping.coupling[plate][j] !== 0) continue;
+        risk += softLinks.has(`${plate}|${j}`) ? 1 / 2 : 1 / 3;
+      }
+      if (!least || risk < least.risk) least = { plate, dir, risk };
     }
+  }
+  if (least) {
+    return {
+      type: 'probe',
+      plate: least.plate,
+      dir: least.dir,
+      safe: false,
+      reason: 'No fully safe probe yet — some plates are at an edge. This is the least-risky option.',
+    };
   }
 
   // 4) every untried press jams here. Any legal known move changes the layout,

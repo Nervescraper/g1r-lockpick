@@ -45,9 +45,12 @@ export class Driver {
     if (artifactsDir) mkdirSync(artifactsDir, { recursive: true });
 
     page.on('console', (msg) => {
-      if (msg.type() === 'error' || msg.type() === 'warning') {
-        this.issue('console', `${msg.type()}: ${msg.text()}`);
-      }
+      if (msg.type() !== 'error' && msg.type() !== 'warning') return;
+      // The GitHub star widget (buttons.github.io + api.github.com) is
+      // third-party and rate-limits under repeated runs — not the app's doing.
+      const src = msg.location()?.url || '';
+      if (/github\.io|github\.com/.test(src)) return;
+      this.issue('console', `${msg.type()}: ${msg.text()} (${src})`);
     });
     page.on('pageerror', (err) => this.issue('pageerror', String(err)));
     page.on('requestfailed', (req) => {

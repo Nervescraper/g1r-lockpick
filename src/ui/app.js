@@ -34,7 +34,7 @@ const CHANGELOG = [
     items: [
       'Pressed a plate and it jammed? Click “It jammed” — the app remembers that press fails at those positions (even after a pick break) and guides you to a better one instead of repeating itself.',
       'The app now tracks your pick like the game does: the first jam is a warning, the second breaks the pick — and the board resets itself to the start to match the snapped-back slides.',
-      'Saw slides wiggle when it jammed? Tap them on the jam note (optional) — each one pins down a link and rules out presses that would jam the same way. Missing some is fine.',
+      'Saw slides wiggle when it jammed? Tap them on the jam note (optional) — any slide counts, since a wiggle means it’s linked. When only one slide sits on an edge the app identifies the blocker by itself, and it warns when your taps can’t include the real blocker.',
       'Long stretches of the same press now step as one: the Next move card reads e.g. “P2 ▶ Right ×6” with a “Did all 6” button, so a 68-press solution takes ~20 clicks instead of 68.',
       'When the edges can’t all be cleared with mapped moves, the app now suggests known moves that pull a slide off an edge; if every untried press jams, it offers a layout-changing move rather than leaving you guessing.',
       '“Edit positions” now only corrects where the slides are. The lock’s reset point stays put, so Reset always lands where the game actually snaps back to.',
@@ -124,14 +124,14 @@ function freshSetup(n) {
 }
 
 function persist() {
-  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, pickMistakes, picksBroken } = state;
+  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken } = state;
   // The import and contents screens are transient overlays over the Lock step — never
   // persist them as a saved session stage (a reload would otherwise restore an empty one).
   const stage = state.stage === 'import' || state.stage === 'contents' ? 'lock' : state.stage;
   // While editing positions in Solve, changes stay pending until Apply — persist the
   // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
   const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
-  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, pickMistakes, picksBroken });
+  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken });
   syncLock();
 }
 
@@ -243,6 +243,28 @@ function blockedNow() {
   return set;
 }
 
+// Soft links — "i|j" pairs the player saw wiggle on one of plate i's jams:
+// linked for sure, sign unknown (positions don't matter; a link is a link).
+function softLinksSet() {
+  return new Set(state.knownLinks || []);
+}
+
+// The other slides sitting on an edge at the positions a jam happened at. The
+// blocker is always among these; with exactly one, it IS the blocker.
+function jamEdgeOthers(jn) {
+  const out = [];
+  for (let j = 0; j < state.n; j++) {
+    if (j !== jn.plate && (jn.positions[j] <= MIN || jn.positions[j] >= MAX)) out.push(j);
+  }
+  return out;
+}
+
+// The exact coupling cell implied by plate j being pushed PAST its edge by the
+// jammed press (only valid when j is known to be the blocker).
+function blockerCell(jn, j) {
+  return (jn.positions[j] >= MAX ? 1 : -1) * (jn.dir === 'L' ? 1 : -1);
+}
+
 // Start (or restart) a recording for `plate` against the current positions. The
 // press direction defaults toward center, but when the app's suggestion is this
 // very plate, its direction wins — after a reported jam the recommender may pick
@@ -253,7 +275,7 @@ function seedRecording(plate) {
   state.rec = plate == null ? null : createRecording(state.positions, plate, relFromMapping(plate));
   state.recTouched = false;
   if (state.rec && suggestEnabled()) {
-    const rec = recommendNext(state.positions, state.mapping, blockedNow());
+    const rec = recommendNext(state.positions, state.mapping, blockedNow(), softLinksSet());
     if (rec && rec.type === 'probe' && rec.plate === plate) {
       state.rec = setActiveDir(state.rec, rec.dir === 'L' ? 1 : -1);
     }
@@ -267,7 +289,7 @@ function suggestDefault() {
   for (let i = 0; i < m.n; i++) if (m.status[i] !== 'done') { next = i; break; }
   // With suggestions on, jump to the recommended plate; off, just take the first unmapped.
   if (suggestEnabled()) {
-    const rec = recommendNext(state.positions, m, blockedNow());
+    const rec = recommendNext(state.positions, m, blockedNow(), softLinksSet());
     if (rec && rec.type === 'probe') next = rec.plate;
   }
   seedRecording(next);
@@ -280,6 +302,8 @@ function saveActivePlate() {
   state.mapping.coupling[rec.active] = couplingRow(rec);
   state.positions = positionsOf(rec); // commit the live, recorded positions
   state.mapping.status[rec.active] = 'done';
+  // The full row is now observed truth — soft links for this plate are superseded.
+  state.knownLinks = (state.knownLinks || []).filter((k) => !k.startsWith(`${rec.active}|`));
   suggestDefault(); // re-seed the next recording against the new positions
 }
 
@@ -1092,31 +1116,47 @@ function setupPanel() {
 
 // ---------- Mapping (unified into the board) ----------
 
-// The post-jam note: what the jam cost, plus optional wiggle capture. The game
-// wiggles the plates the press would have pushed past an edge; each one the
-// player SAW pins down one cell of the jammed plate's row exactly (a wiggling
-// plate sits on an edge, so the push direction is known). Reports are trusted
-// but never assumed complete — untapped plates teach nothing.
+// The post-jam note: what the jam cost, plus optional wiggle capture. On a jam
+// the game wiggles every linked plate (not just the blockers), so a tap on ANY
+// slide records a link to the jammed plate — exact only when the tapped slide
+// is provably the blocker (sole edge slide), otherwise sign-unknown. Reports
+// are trusted but never assumed complete — untapped plates teach nothing. One
+// thing IS certain: at least one wiggler sits on an edge (the blocker), which
+// powers the auto-inference and the "you missed one" nudge below.
 function jamNoticeHtml(jn) {
   const lead = jn.broke
     ? `Second mistake — the pick broke and the slides snapped back to the start. Board reset to match; mapping kept.`
     : `Noted: <b>${plateLabel(jn.plate)}</b> <span class="dir">${dirArrow(jn.dir)} ${DIR_WORD[jn.dir]}</span> jams here —
        it won't be suggested again. One more jam breaks the pick.`;
+  const links = state.knownLinks || [];
+  const edgeOthers = jamEdgeOthers(jn);
   const chips = [];
+  let edgeTapped = false;
+  let anyTapped = false;
   for (let j = 0; j < state.n; j++) {
     if (j === jn.plate) continue;
-    const pj = jn.positions[j];
-    if (pj > MIN && pj < MAX) continue; // only a plate on an edge can be the blocker
-    const cell = (pj >= MAX ? 1 : -1) * (jn.dir === 'L' ? 1 : -1);
-    const on = state.mapping.coupling[jn.plate][j] === cell;
+    const onEdge = jn.positions[j] <= MIN || jn.positions[j] >= MAX;
+    const on = state.mapping.coupling[jn.plate][j] !== 0 || links.includes(`${jn.plate}|${j}`);
+    if (on) anyTapped = true;
+    if (on && onEdge) edgeTapped = true;
     chips.push(`<span class="ap-btn${on ? ' primary' : ''}" data-action="jam-wiggle" data-plate="${j}">${plateLabel(j)}</span>`);
   }
-  const wiggle = chips.length
-    ? `<div class="muted" style="margin-top:8px">Saw slides <i>wiggle</i>? Tap them — each pins down one of
-        ${plateLabel(jn.plate)}'s links (tap again to undo). Optional; missing some is fine.</div>
-       <div style="margin-top:4px">${chips.join(' ')}</div>`
+  const auto = jn.autoLearned != null
+    ? `<div class="muted" style="margin-top:6px"><b>${plateLabel(jn.autoLearned)}</b> is the only slide on an edge, so it
+        must be the blocker — that link was recorded automatically.</div>`
     : '';
-  return `<div class="note" style="margin-top:6px">${lead}${wiggle}</div>`;
+  // The blocker always wiggles and always sits on an edge: taps that include no
+  // edge slide are provably missing one.
+  const missed = anyTapped && !edgeTapped && edgeOthers.length > 1
+    ? `<div class="muted" style="margin-top:4px">⚠ The blocking slide always sits on an edge — you missed one of
+        ${edgeOthers.map(plateLabel).join(', ')}.</div>`
+    : '';
+  const wiggle = chips.length
+    ? `<div class="muted" style="margin-top:8px">Saw slides <i>wiggle</i>? Tap them — a wiggle means it's linked to
+        ${plateLabel(jn.plate)} (tap again to undo). Optional; missing some is fine.</div>
+       <div style="margin-top:4px">${chips.join(' ')}</div>${missed}`
+    : '';
+  return `<div class="note" style="margin-top:6px">${lead}${auto}${wiggle}</div>`;
 }
 
 function mappingView() {
@@ -1125,7 +1165,7 @@ function mappingView() {
 
   const active = state.activePlate;
   const mapped = m.status.filter((s) => s === 'done').length;
-  const suggestion = allMapped(m) ? null : recommendNext(state.positions, m, blockedNow());
+  const suggestion = allMapped(m) ? null : recommendNext(state.positions, m, blockedNow(), softLinksSet());
 
   const col = document.createElement('div');
   col.className = 'map-wrap';
@@ -1251,9 +1291,14 @@ function mappingView() {
     if (i === active) return `<span class="self-note">the plate you're moving</span>`;
     if (active == null) return '';
     const r = state.rec ? tagOf(state.rec, i) : 'none';
+    // A soft link (seen wiggling on one of this plate's jams, sign unknown):
+    // expect this slide to move — the press will tell you which way.
+    const linked = r === 'none' && (state.knownLinks || []).includes(`${active}|${i}`)
+      ? `<span class="muted" style="font-size:10px;align-self:center" title="This slide wiggled when ${plateLabel(active)} jammed — it's linked; the press will show which way.">∿ linked</span>`
+      : '';
     return `<div class="rel">
       <span class="rel-btn ${r === 'with' ? 'on-with' : ''}" data-action="set-rel" data-plate="${i}" data-rel="with">Moves with</span>
-      <span class="rel-btn ${r === 'opposite' ? 'on-opp' : ''}" data-action="set-rel" data-plate="${i}" data-rel="opposite">Moves opposite</span>
+      <span class="rel-btn ${r === 'opposite' ? 'on-opp' : ''}" data-action="set-rel" data-plate="${i}" data-rel="opposite">Moves opposite</span>${linked}
     </div>`;
   });
 
@@ -1732,6 +1777,15 @@ appEl.addEventListener('click', (e) => {
         // Snapshot the jam-time positions: the wiggle chips must reflect where
         // the slides were when it jammed, even after a break auto-resets them.
         state.jamNotice = { plate: rec.active, dir, broke, positions: state.positions.slice() };
+        // The blocker always sits on an edge. With exactly one other slide on
+        // an edge, it MUST be the blocker — record that link automatically,
+        // sign and all (it was being pushed past its edge).
+        const edgeOthers = jamEdgeOthers(state.jamNotice);
+        if (edgeOthers.length === 1) {
+          const j = edgeOthers[0];
+          state.mapping.coupling[rec.active][j] = blockerCell(state.jamNotice, j);
+          state.jamNotice.autoLearned = j;
+        }
         if (broke) {
           state.picksBroken = (state.picksBroken || 0) + 1;
           resetPinsToInitial(); // also zeroes pickMistakes (fresh pick)
@@ -1745,7 +1799,7 @@ appEl.addEventListener('click', (e) => {
 
     case 'plan-done': {
       // Apply the known edge-clearing sequence to the live positions, then re-seed.
-      const rec = allMapped(state.mapping) ? null : recommendNext(state.positions, state.mapping, blockedNow());
+      const rec = allMapped(state.mapping) ? null : recommendNext(state.positions, state.mapping, blockedNow(), softLinksSet());
       if (rec && rec.type === 'plan') {
         state.positions = applySequence(state.positions, state.mapping.coupling, rec.moves);
         state.skipPlanKey = undefined; // positions changed; future plans are fresh
@@ -1757,18 +1811,30 @@ appEl.addEventListener('click', (e) => {
       state.skipPlanKey = state.positions.join(','); // dismiss until positions change
       break;
     case 'jam-wiggle': {
-      // The player saw this plate wiggle on the jam they just reported. A
-      // wiggling plate was about to be pushed past the edge it sits on, which
-      // pins the jammed plate's link to it exactly. Tap again to undo. Absence
-      // of a tap means nothing — the player may simply not have seen it.
+      // The player saw this plate wiggle on the jam they just reported: linked
+      // to the jammed plate for sure. The SIGN is only known when this slide is
+      // provably the blocker (the sole edge slide at jam time) — a wiggling
+      // edge slide may have been moving inward legally. Everything else records
+      // as a soft link (linked, sign unknown). Tap again to undo. Absence of a
+      // tap means nothing — the player may simply not have seen it.
       const jn = state.jamNotice;
       if (!jn || !state.mapping) break;
       const j = +t.dataset.plate;
-      const pj = jn.positions[j];
-      if (j === jn.plate || (pj > MIN && pj < MAX)) break;
-      const cell = (pj >= MAX ? 1 : -1) * (jn.dir === 'L' ? 1 : -1);
+      if (j === jn.plate) break;
       const row = state.mapping.coupling[jn.plate];
-      row[j] = row[j] === cell ? 0 : cell;
+      const key = `${jn.plate}|${j}`;
+      const links = (state.knownLinks ??= []);
+      if (row[j] !== 0) {
+        row[j] = 0; // undo an exact cell (auto-learned or previously recorded)
+        if (jn.autoLearned === j) jn.autoLearned = undefined;
+      } else if (links.includes(key)) {
+        state.knownLinks = links.filter((k) => k !== key); // undo a soft link
+      } else if (jamEdgeOthers(jn).length === 1 && jamEdgeOthers(jn)[0] === j) {
+        row[j] = blockerCell(jn, j); // sole edge slide ⇒ the blocker ⇒ exact
+        jn.autoLearned = j;
+      } else {
+        links.push(key);
+      }
       defer(state.mapping, jn.plate); // the row carries partial knowledge now
       suggestDefault(); // learned links can rule out (or reopen) suggestions
       break;
@@ -1849,6 +1915,7 @@ appEl.addEventListener('click', (e) => {
         state.activePlate = undefined;
         state.rec = null;
         state.blockedProbes = []; // jam memory and pick damage belong to the previous lock
+        state.knownLinks = [];
         state.pickMistakes = 0;
         state.picksBroken = 0;
         if (state.stage === 'discovery') suggestDefault();

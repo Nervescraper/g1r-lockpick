@@ -171,6 +171,19 @@ test('a link learned from a jam wiggle rules out presses that must jam', () => {
   assert.deepEqual({ plate: rec.plate, dir: rec.dir }, { plate: 2, dir: 'R' });
 });
 
+test('tier-3 prefers a press without a soft link to an edge slide', () => {
+  const m = createMapping(3);
+  // Positions [1,7,4]: plates 0 and 1 on edges, nothing mapped, nothing safe.
+  // A soft link 0→1 (seen wiggling, sign unknown) makes pressing plate 0 a
+  // coin flip against plate 1's edge; pressing plate 1 carries only the
+  // unknown-cell risk, so it wins despite candidate order.
+  const withLink = recommendNext([1, 7, 4], m, new Set(), new Set(['0|1']));
+  assert.deepEqual({ plate: withLink.plate, dir: withLink.dir }, { plate: 1, dir: 'R' });
+  // Without the link the risks tie and candidate order (edge-first) holds.
+  const without = recommendNext([1, 7, 4], m);
+  assert.deepEqual({ plate: without.plate, dir: without.dir }, { plate: 0, dir: 'L' });
+});
+
 test('unknown (zero) cells imply nothing — wiggle reports may be incomplete', () => {
   const m = createMapping(2);
   // Nothing learned beyond the self-cells: with no plate on a hostile edge for
