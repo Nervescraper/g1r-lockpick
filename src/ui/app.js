@@ -33,6 +33,7 @@ const CHANGELOG = [
     date: '2026-06-09',
     items: [
       'Pressed a plate and it jammed? Click “It jammed” — the app remembers that press fails at those positions (even after a pick break) and guides you to a better one instead of repeating itself.',
+      'The app now tracks your pick like the game does: the first jam is a warning, the second breaks the pick — and the board resets itself to the start to match the snapped-back slides.',
       'When the edges can’t all be cleared with mapped moves, the app now suggests known moves that pull a slide off an edge; if every untried press jams, it offers a layout-changing move rather than leaving you guessing.',
       '“Edit positions” now only corrects where the slides are. The lock’s reset point stays put, so Reset always lands where the game actually snaps back to.',
       'Pressing R to reset during mapping now behaves exactly like the Reset button — the move being recorded follows the reset instead of showing stale positions.',
@@ -121,14 +122,14 @@ function freshSetup(n) {
 }
 
 function persist() {
-  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes } = state;
+  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, pickMistakes, picksBroken } = state;
   // The import and contents screens are transient overlays over the Lock step — never
   // persist them as a saved session stage (a reload would otherwise restore an empty one).
   const stage = state.stage === 'import' || state.stage === 'contents' ? 'lock' : state.stage;
   // While editing positions in Solve, changes stay pending until Apply — persist the
   // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
   const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
-  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes });
+  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, pickMistakes, picksBroken });
   syncLock();
 }
 
@@ -1113,13 +1114,23 @@ function mappingView() {
   // Live edge coaching, recomputed from committed positions every render.
   const coachHtml = done ? '' : `<div class="coach muted" style="margin-top:6px">${coachingMessage(state.positions)}</div>`;
   // One-shot acknowledgement after "It jammed": confirms the press is remembered
-  // and reminds the player what a jam costs. Cleared on the next click.
+  // and reports what it cost the pick. Cleared on the next click.
   const jamHtml = state.jamNotice
-    ? `<div class="note" style="margin-top:6px">Noted — <b>${plateLabel(state.jamNotice.plate)}</b>
-        <span class="dir">${dirArrow(state.jamNotice.dir)} ${DIR_WORD[state.jamNotice.dir]}</span> jams at these positions
-        and won't be suggested again here. A jam is a mistake: if it was your pick's <b>second</b>, the pick broke and
-        every slide snapped back to the start — use Reset below to match.</div>`
+    ? state.jamNotice.broke
+      ? `<div class="note" style="margin-top:6px">That jam was the pick's <b>second</b> mistake — the pick broke and
+          every slide snapped back to the start. The board has been reset to match; your mapping and jam notes are kept.</div>`
+      : `<div class="note" style="margin-top:6px">Noted — <b>${plateLabel(state.jamNotice.plate)}</b>
+          <span class="dir">${dirArrow(state.jamNotice.dir)} ${DIR_WORD[state.jamNotice.dir]}</span> jams at these positions
+          and won't be suggested again here. <b>1 mistake on this pick</b> — another jam breaks it.</div>`
     : '';
+  // Standing pick-damage line, so the stakes of the next probe are always visible.
+  const pickHtml = done
+    ? ''
+    : `<div class="muted" style="margin-top:6px">Pick: ${
+        state.pickMistakes
+          ? '<span style="color:var(--danger)">⚠ 1 mistake — another jam breaks it</span>'
+          : 'no mistakes yet'
+      }${state.picksBroken ? ` · ${state.picksBroken} broken so far` : ''}</div>`;
   // Tier 4: the player has reported every viable press as jammed at these positions.
   const stuckHtml =
     suggestEnabled() && suggestion && suggestion.type === 'stuck'
@@ -1160,7 +1171,7 @@ function mappingView() {
   // Per-user toggle: off hides the app's move guidance (preview, suggested-press text,
   // recommended-plate jump, Done/Skip plan) but keeps the edge/jam warning.
   const suggestToggleHtml = `<label class="ap-kbd" style="margin-top:4px"><input type="checkbox" data-action="toggle-suggest"${suggestEnabled() ? ' checked' : ''}> Suggest moves</label>`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${headBody}${moveHintHtml}${coachHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${headBody}${moveHintHtml}${coachHtml}${pickHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
   col.appendChild(head);
 
   const boardHost = document.createElement('div');
@@ -1554,6 +1565,7 @@ function couplingCard(coupling) {
 function resetPinsToInitial() {
   if (!state.initial) return;
   state.positions = state.initial.slice();
+  state.pickMistakes = 0; // slides only snap back when a pick breaks — assume a fresh pick
   if (state.stage === 'solve') state.plan = undefined; // re-plan from the reset point
   if (state.stage === 'discovery') {
     state.skipPlanKey = undefined;
@@ -1642,13 +1654,22 @@ appEl.addEventListener('click', (e) => {
     case 'probe-jammed': {
       // The press the player just tried (the recording's plate + direction) was
       // blocked: nothing moved. Remember it against the current positions so it
-      // is never suggested here again, deprioritize the plate, and move on.
+      // is never suggested here again, and deprioritize the plate. Each jam also
+      // damages the pick: the SECOND mistake breaks it, which in the game snaps
+      // every slide back to the start — auto-reset the board to match.
       const rec = state.rec;
       if (rec) {
         const dir = rec.deltaI === 1 ? 'L' : 'R';
         (state.blockedProbes ??= []).push(`${state.positions.join(',')}|${rec.active}|${dir}`);
         defer(state.mapping, rec.active);
-        state.jamNotice = { plate: rec.active, dir };
+        const broke = (state.pickMistakes || 0) + 1 >= 2;
+        state.jamNotice = { plate: rec.active, dir, broke };
+        if (broke) {
+          state.picksBroken = (state.picksBroken || 0) + 1;
+          resetPinsToInitial(); // also zeroes pickMistakes (fresh pick)
+        } else {
+          state.pickMistakes = 1;
+        }
         suggestDefault();
       }
       break;
@@ -1737,7 +1758,9 @@ appEl.addEventListener('click', (e) => {
         state.plan = undefined;
         state.activePlate = undefined;
         state.rec = null;
-        state.blockedProbes = []; // jam memory belongs to the previous lock
+        state.blockedProbes = []; // jam memory and pick damage belong to the previous lock
+        state.pickMistakes = 0;
+        state.picksBroken = 0;
         if (state.stage === 'discovery') suggestDefault();
       }
       break;

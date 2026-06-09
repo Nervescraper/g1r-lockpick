@@ -379,25 +379,17 @@ export class Driver {
       const r = this.game.press(choice.plate, choice.dir);
       if (r.blocked) {
         blocked.add(`${posKey}|${choice.plate}${choice.dir}`);
-        // Tell the app the press jammed, so its guidance moves on.
+        // Tell the app the press jammed, so its guidance moves on. The app counts
+        // jams the way the game does: the 2nd one breaks the pick, and the app
+        // must auto-reset the board to the start to match the snapped-back slides.
         const jamBtn = await this.page.$('[data-action="probe-jammed"]');
         if (jamBtn) await jamBtn.click();
         else this.issue('ui', 'press jammed but there is no control to tell the app');
-        if (r.broke) {
-          if (!brokeOnce) await this.shot('after-first-break');
+        if (r.broke && !brokeOnce) {
+          await this.shot('after-first-break');
           brokeOnce = true;
-          // Slides snapped back. If the board had moved off the start, tell the app.
-          if (posKey !== this.game.positions.join(',')) {
-            const resetBtn = await this.page.$('[data-action="reset-pins"]');
-            if (!resetBtn) {
-              this.issue('deadend', 'pick broke after slides had moved, but no Reset control is on screen');
-              await this.shot('no-reset-after-break');
-              return false;
-            }
-            await resetBtn.click();
-            await this.expectBoardMatchesGame('after pick-break reset');
-          }
         }
+        await this.expectBoardMatchesGame(r.broke ? 'after the 2nd jam (auto-reset)' : 'after a reported jam');
         continue;
       }
 
