@@ -71,6 +71,7 @@ const appEl = document.getElementById('app');
 let state = restore();
 let settings = loadSettings(store);
 const kbdEnabled = () => settings.keyboardShortcuts !== false; // on by default
+const suggestEnabled = () => settings.suggestMoves !== false; // move suggestions on by default
 // Phones have no physical keyboard, so the shortcuts are useless and their toggle is
 // hidden (see the <=560px CSS breakpoint); treat that narrow viewport as "shortcuts off".
 const isNarrowViewport = () => window.matchMedia('(max-width: 560px)').matches;
@@ -210,10 +211,14 @@ function suggestDefault() {
   const m = state.mapping;
   let next = null;
   for (let i = 0; i < m.n; i++) if (m.status[i] !== 'done') { next = i; break; }
-  const rec = recommendNext(state.positions, m);
-  if (rec && rec.type === 'probe') next = rec.plate;
+  // With suggestions on, jump to the recommended plate; off, just take the first unmapped.
+  if (suggestEnabled()) {
+    const rec = recommendNext(state.positions, m);
+    if (rec && rec.type === 'probe') next = rec.plate;
+  }
   state.activePlate = next;
   state.rec = next == null ? null : createRecording(state.positions, next, relFromMapping(next));
+  state.recTouched = false;
 }
 
 function saveActivePlate() {
@@ -594,12 +599,14 @@ function onMapClick(i) {
   if (state.activePlate === i) return; // already recording this plate; keep its tags
   state.activePlate = i;
   state.rec = createRecording(state.positions, i, relFromMapping(i));
+  state.recTouched = false;
   render();
 }
 function onMapDrag(i, pos) {
   const rec = state.rec;
   if (!rec) return;
   state.rec = i === rec.active ? dragActive(rec, pos) : dragOther(rec, i, pos);
+  state.recTouched = true; // a real drag/tag => start previewing even with suggestions off
   render();
 }
 
@@ -1051,9 +1058,11 @@ function mappingView() {
   // Board data derived from the in-progress recording: the solid slide sits at the
   // tentative landing (positionsOf), a faint ghost marks each moved plate's start, and
   // moved plates get a "start → landing" label — so a previewed press never looks
-  // committed (you can always see where each slide actually is).
-  const boardPositions = state.rec ? positionsOf(state.rec) : state.positions;
-  const ghosts = state.rec
+  // committed. With "Suggest moves" off we don't preview the suggested press on entry:
+  // the board shows the real positions until you actually record a move (recTouched).
+  const previewing = !!state.rec && (suggestEnabled() || state.recTouched);
+  const boardPositions = previewing ? positionsOf(state.rec) : state.positions;
+  const ghosts = previewing
     ? boardPositions.map((p, i) => (p !== state.rec.baseline[i] ? state.rec.baseline[i] : null))
     : null;
   const hasGhost = !!ghosts && ghosts.some((g) => g != null);
@@ -1062,7 +1071,7 @@ function mappingView() {
   const head = document.createElement('div');
   head.className = 'ap-card';
   const suggestHtml =
-    suggestion && suggestion.type === 'probe' && suggestion.plate !== active
+    suggestEnabled() && suggestion && suggestion.type === 'probe' && suggestion.plate !== active
       ? `<div class="muted" style="margin-top:6px">Suggested: <b style="color:var(--gold)">${plateLabel(
           suggestion.plate
         )}</b> ${suggestion.safe ? '✓ safe to press' : '⚠ may jam at an edge'}
@@ -1074,7 +1083,7 @@ function mappingView() {
   // A Skip is remembered against the current positions so it stays dismissed until the
   // board changes (Save, or a Done'd move); any position change re-offers it.
   const planPending =
-    suggestion && suggestion.type === 'plan' && state.skipPlanKey !== state.positions.join(',');
+    suggestEnabled() && suggestion && suggestion.type === 'plan' && state.skipPlanKey !== state.positions.join(',');
   const planHtml = planPending
     ? `<div class="plan-suggest" style="margin-top:6px">
         <div class="muted">${suggestion.reason}</div>
@@ -1093,7 +1102,7 @@ function mappingView() {
     : `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`;
   // The suggested press for the active plate, stated explicitly (direction follows the
   // recording's live deltaI). The board previews it as a ghost → solid move.
-  const moveHintHtml = isActive && state.rec
+  const moveHintHtml = suggestEnabled() && isActive && state.rec
     ? `<div style="margin-top:6px;font-size:14px;color:#fff">Suggested move: press <b style="color:var(--gold)">${plateLabel(active)}</b>
         <span class="dir">${dirArrow(activeDir)} ${DIR_WORD[activeDir]}</span> — do it in the lock, then record what moved.</div>`
     : '';
@@ -1102,7 +1111,10 @@ function mappingView() {
     ? `<div class="muted" style="margin-top:4px;font-size:12px">On the board, the <b style="color:var(--gold);font-weight:600">dashed</b> slide marks where a plate is <i>now</i>; the solid slide is where the press lands.</div>`
     : '';
   const title = done ? `Map the lock · all ${m.n} mapped ✓` : `Map the lock · ${mapped} of ${m.n} mapped`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${headBody}${moveHintHtml}${coachHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
+  // Per-user toggle: off hides the app's move guidance (preview, suggested-press text,
+  // recommended-plate jump, Done/Skip plan) but keeps the edge/jam warning.
+  const suggestToggleHtml = `<label class="ap-kbd" style="margin-top:4px"><input type="checkbox" data-action="toggle-suggest"${suggestEnabled() ? ' checked' : ''}> Suggest moves</label>`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${headBody}${moveHintHtml}${coachHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
   col.appendChild(head);
 
   const boardHost = document.createElement('div');
@@ -1136,7 +1148,7 @@ function mappingView() {
   // Labels go green once a plate is saved, and show the move as "start → landing" for
   // any plate the in-progress recording shifts (matching the board's ghost → solid).
   const labels = boardPositions.map((p, i) => {
-    const moved = state.rec && p !== state.rec.baseline[i];
+    const moved = previewing && p !== state.rec.baseline[i];
     const val = moved ? `${state.rec.baseline[i]} → ${p}` : `${p}`;
     return `<b${m.status[i] === 'done' ? ' class="done"' : ''}>P${i + 1}</b> · ${val}`;
   });
@@ -1526,7 +1538,7 @@ appEl.addEventListener('click', (e) => {
       break;
     }
     case 'set-rel':
-      if (state.rec) state.rec = toggleTag(state.rec, +t.dataset.plate, t.dataset.rel);
+      if (state.rec) { state.rec = toggleTag(state.rec, +t.dataset.plate, t.dataset.rel); state.recTouched = true; }
       break;
     case 'save-next': saveActivePlate(); break;
 
@@ -1600,6 +1612,10 @@ appEl.addEventListener('click', (e) => {
     }
     case 'toggle-kbd':
       settings.keyboardShortcuts = !kbdEnabled();
+      saveSettings(store, settings);
+      break;
+    case 'toggle-suggest':
+      settings.suggestMoves = !suggestEnabled();
       saveSettings(store, settings);
       break;
     case 'toggle-collapse':
