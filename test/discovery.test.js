@@ -151,11 +151,32 @@ test('tier-3 fallback skips blocked presses and never presses into a wall', () =
   assert.deepEqual({ plate: rec.plate, dir: rec.dir }, { plate: 1, dir: 'R' });
 });
 
-test('reports stuck when every physically possible press is blocked', () => {
+test('reports stuck when every possible press is blocked and nothing is mapped', () => {
   const m = createMapping(2);
   const rec = recommendNext([1, 7], m, new Set(['0|L', '1|R']));
   assert.equal(rec.type, 'stuck');
   assert.match(rec.reason, /jam/i);
+});
+
+test('falls back to an edge-reducing plan when a full clear is impossible', () => {
+  const m = createMapping(3);
+  m.status[0] = 'done'; // mapped: moves only itself (default row)
+  // plate 0 on MAX, plate 2 stranded on MIN where no mapped plate reaches it.
+  const rec = recommendNext([7, 4, 1], m);
+  assert.equal(rec.type, 'plan');
+  assert.deepEqual(rec.moves, [{ plate: 0, dir: 'R' }]);
+  assert.match(rec.reason, /edge/i);
+});
+
+test('when every untried press jams, suggests a known move to change the layout', () => {
+  const m = createMapping(2);
+  m.status[0] = 'done';
+  // plate 1 at MIN: only L is physically possible, and the player saw it jam.
+  // Moving mapped plate 0 cannot reduce edges, but it re-opens untried presses.
+  const rec = recommendNext([4, 1], m, new Set(['1|L']));
+  assert.equal(rec.type, 'plan');
+  assert.deepEqual(rec.moves, [{ plate: 0, dir: 'L' }]);
+  assert.match(rec.reason, /layout/i);
 });
 
 test('a safe probe that clears an edge gets an edge-aware reason', () => {

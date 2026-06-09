@@ -1,5 +1,5 @@
-import { MIN, MAX, applyMove } from './model.js';
-import { planEdgeClear } from './solver.js';
+import { MIN, MAX, applyMove, isLegal } from './model.js';
+import { planEdgeClear, planEdgeReduce } from './solver.js';
 
 export function createMapping(n) {
   const coupling = Array.from({ length: n }, (_, i) => {
@@ -111,6 +111,17 @@ export function recommendNext(positions, mapping, blocked = new Set()) {
     };
   }
 
+  // 2b) a full clear is impossible (some edge plates aren't reachable from the
+  // mapped ones) — but freeing even one edge with known moves beats probing blind.
+  const reduce = planEdgeReduce(positions, mapping.coupling, donePlates);
+  if (reduce && reduce.length) {
+    return {
+      type: 'plan',
+      moves: reduce,
+      reason: 'No safe probe, and the edges can’t all be cleared with known moves yet — these pull a slide off an edge so the next probe risks less.',
+    };
+  }
+
   // 3) least-risky probe (no guaranteed-safe option, no clearing plan yet)
   for (const plate of candidates) {
     for (const dir of preferredDirs(positions, plate)) {
@@ -125,10 +136,21 @@ export function recommendNext(positions, mapping, blocked = new Set()) {
     }
   }
 
-  // 4) every remaining press is known to jam at these positions
+  // 4) every untried press jams here. Any legal known move changes the layout,
+  // which re-opens presses that haven't been tried at the new positions.
+  for (const plate of donePlates) {
+    for (const dir of ['L', 'R']) {
+      if (!isLegal(positions, mapping.coupling, plate, dir)) continue;
+      return {
+        type: 'plan',
+        moves: [{ plate, dir }],
+        reason: 'Every untried press jams at these positions — this known move changes the layout so new presses open up.',
+      };
+    }
+  }
   return {
     type: 'stuck',
-    reason: 'Every untried press jams at these positions — move a mapped slide to change the layout, or reset the pins.',
+    reason: 'Every untried press jams at these positions and no mapped slide can move — reset the pins to start from a known state.',
   };
 }
 

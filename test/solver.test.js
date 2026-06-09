@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { solve, countSwitches, planEdgeClear, applySequence } from '../src/solver.js';
+import { solve, countSwitches, planEdgeClear, planEdgeReduce, applySequence } from '../src/solver.js';
 import { applyMove, isSolved, legalMoves, MIN, MAX } from '../src/model.js';
 
 // helper: replay a solution, asserting every step stays in 1..7
@@ -349,6 +349,23 @@ test('planEdgeClear finds a multi-step sequence (no single move clears both edge
   // both plates at the MIN edge, independent self-moves: needs one Left press each.
   const plan = planEdgeClear([1, 1], [[1, 0], [0, 1]], [0, 1]);
   assert.deepEqual(plan, [{ plate: 0, dir: 'L' }, { plate: 1, dir: 'L' }]);
+});
+
+test('planEdgeReduce returns an empty plan when nothing is on an edge', () => {
+  assert.deepEqual(planEdgeReduce([4, 3], [[1, 0], [0, 1]], [0, 1]), []);
+});
+
+test('planEdgeReduce frees one edge when a full clear is impossible', () => {
+  // plate 0 (mapped) moves only itself; plate 2 is stranded at MIN and nothing
+  // mapped reaches it — a full clear is impossible, but freeing plate 0 helps.
+  const coupling = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  assert.equal(planEdgeClear([7, 4, 1], coupling, [0]), null);
+  assert.deepEqual(planEdgeReduce([7, 4, 1], coupling, [0]), [{ plate: 0, dir: 'R' }]);
+});
+
+test('planEdgeReduce returns null when known moves cannot free any edge', () => {
+  // plate 0 (mapped, interior, self-moving) can never free plate 1's MIN edge.
+  assert.equal(planEdgeReduce([4, 1], [[1, 0], [0, 1]], [0]), null);
 });
 
 test('applySequence returns a copy of positions for an empty move list', () => {

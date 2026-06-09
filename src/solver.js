@@ -1,4 +1,4 @@
-import { applyMove, isSolved, isLegal, legalMoves, allInterior, GOAL } from './model.js';
+import { applyMove, isSolved, isLegal, legalMoves, allInterior, GOAL, MIN, MAX } from './model.js';
 import { MinHeap } from './heap.js';
 import { transpose, det, adjugate, matVec } from './linalg.js';
 
@@ -116,13 +116,12 @@ export function applySequence(positions, coupling, moves) {
   return p;
 }
 
-// Breadth-first search for a shortest sequence of moves on already-mapped (`done`)
-// plates that drives every plate off the edges (all-interior). Only legal moves are
-// expanded, so a returned plan never strands a plate on an edge — directly avoiding
-// the "clear one edge, create another" whack-a-mole. Returns move[] (possibly empty
-// when already all-interior) or null when no done-plate sequence reaches all-interior.
-export function planEdgeClear(positions, coupling, donePlates, { maxNodes = 200_000 } = {}) {
-  if (allInterior(positions)) return [];
+// Breadth-first search for a shortest sequence of legal moves on already-mapped
+// (`done`) plates reaching a state `accept` likes. Only legal moves are expanded,
+// so a returned plan never strands a plate past an edge. Returns move[] (possibly
+// empty when the start already qualifies) or null when unreachable.
+function searchDoneMoves(positions, coupling, donePlates, accept, maxNodes) {
+  if (accept(positions)) return [];
   const start = positions.slice();
   const visited = new Set([start.join(',')]);
   const queue = [{ pos: start, path: [] }];
@@ -136,7 +135,7 @@ export function planEdgeClear(positions, coupling, donePlates, { maxNodes = 200_
         const key = np.join(',');
         if (visited.has(key)) continue;
         const path = [...cur.path, { plate, dir }];
-        if (allInterior(np)) return path;
+        if (accept(np)) return path;
         visited.add(key);
         queue.push({ pos: np, path });
         if (++count > maxNodes) return null;
@@ -144,4 +143,22 @@ export function planEdgeClear(positions, coupling, donePlates, { maxNodes = 200_
     }
   }
   return null;
+}
+
+// Shortest done-plate sequence that drives every plate off the edges (all-interior) —
+// directly avoiding the "clear one edge, create another" whack-a-mole.
+export function planEdgeClear(positions, coupling, donePlates, { maxNodes = 200_000 } = {}) {
+  return searchDoneMoves(positions, coupling, donePlates, allInterior, maxNodes);
+}
+
+const edgeCount = (positions) => positions.filter((v) => v <= MIN || v >= MAX).length;
+
+// Best-effort fallback when a full clear is impossible (the plates still holding
+// edges aren't reachable from the mapped ones): the shortest done-plate sequence
+// that strictly REDUCES the number of plates on edges. Every edge freed makes the
+// next probe less risky even if some edges must stay.
+export function planEdgeReduce(positions, coupling, donePlates, { maxNodes = 200_000 } = {}) {
+  const start = edgeCount(positions);
+  if (start === 0) return [];
+  return searchDoneMoves(positions, coupling, donePlates, (p) => edgeCount(p) < start, maxNodes);
 }
