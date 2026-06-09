@@ -329,7 +329,8 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .cpl-card:last-child { border-bottom: 0; }
 .cpl-card .mv { width: 86px; color: #cdc; }
 .cpl-card .mv b { color: var(--gold); }
-.chip { font-size: 11px; padding: 1px 7px; border-radius: 9px; border: 1px solid #333; color: #999; margin-right: 4px; }
+.chip { font-size: 11px; padding: 1px 7px; border-radius: 9px; border: 1px solid #333; color: #999;
+        margin-right: 4px; white-space: nowrap; display: inline-block; margin-bottom: 2px; }
 .chip.left { color: var(--shl); border-color: #34526a; }
 .chip.right { color: var(--shr); border-color: #6a5634; }
 .ap-legend { font-size: 11px; color: #777; margin-top: 8px; }

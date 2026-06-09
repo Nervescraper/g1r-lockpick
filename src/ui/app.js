@@ -1665,6 +1665,8 @@ function solvePanel(side, boardProps) {
 function couplingCard(coupling) {
   const card = document.createElement('div');
   card.className = 'ap-card';
+  // Same icons as the mapping ledger: ⇉ moves with, ⇄ moves opposite. The words
+  // overflowed this narrow panel, so they live in the tooltips instead.
   const rows = coupling
     .map((row, i) => {
       const chips = row
@@ -1672,9 +1674,9 @@ function couplingCard(coupling) {
           j === i
             ? ''
             : v === 1
-            ? `<span class="chip with">${plateLabel(j)} with</span>`
+            ? `<span class="chip with" title="${plateLabel(j)} moves with ${plateLabel(i)} — same direction">⇉ ${plateLabel(j)}</span>`
             : v === -1
-            ? `<span class="chip opp">${plateLabel(j)} opposite</span>`
+            ? `<span class="chip opp" title="${plateLabel(j)} moves opposite ${plateLabel(i)}">⇄ ${plateLabel(j)}</span>`
             : ''
         )
         .filter(Boolean)
@@ -1682,7 +1684,7 @@ function couplingCard(coupling) {
       return `<div class="cpl-card"><span class="mv">Slide <b>${plateLabel(i)}</b></span><span>${chips || '<span class="muted">— no links</span>'}</span></div>`;
     })
     .join('');
-  card.innerHTML = `<div class="ap-h">Connections · reference</div>${rows}`;
+  card.innerHTML = `<div class="ap-h">Connections · reference <span class="muted" style="text-transform:none;letter-spacing:0">— ⇉ with · ⇄ opposite</span></div>${rows}`;
   return card;
 }
 
