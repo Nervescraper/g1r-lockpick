@@ -92,17 +92,51 @@ test('falls back to a least-risky probe when nothing is safe and no prep helps',
   assert.equal(rec.safe, false);
 });
 
-test('recommends a prep move when a known plate can pull an edge plate inward', () => {
+test('recommends an edge-clearing plan when a known plate can pull an edge plate inward', () => {
   const m = createMapping(2);
   // plate 1 is fully mapped: pressing Left on it shifts plate 1 by -1 (toward center).
   m.coupling = [[0, 0], [0, -1]];
   m.status = ['unstarted', 'done'];
-  // plate 1 sits at the top edge (7); while it's there no probe of plate 0 is safe,
-  // so the wizard first nudges plate 1 inward with the known move (Left on plate 1).
+  // plate 1 sits at the top edge (7); no probe of plate 0 is safe while it's there,
+  // so the recommender returns a known-move plan that nudges plate 1 inward (Left).
   const rec = recommendNext([4, 7], m);
-  assert.equal(rec.type, 'prep');
+  assert.equal(rec.type, 'plan');
+  assert.deepEqual(rec.moves, [{ plate: 1, dir: 'L' }]);
+});
+
+test('orders an at-edge plate ahead of an interior one for a guaranteed-safe probe', () => {
+  const m = createMapping(3); // all unstarted
+  // plate 2 sits on the MAX edge, plates 0 and 1 are interior. With no OTHER plate at
+  // an edge, probing plate 2 toward center (R) is safe and should be preferred.
+  const rec = recommendNext([3, 5, 7], m);
+  assert.equal(rec.type, 'probe');
+  assert.equal(rec.safe, true);
+  assert.equal(rec.plate, 2);
+  assert.equal(rec.dir, 'R');
+});
+
+test('edge-first sort picks an at-edge plate first in the tier-3 fallback', () => {
+  const m = createMapping(3); // all unstarted, no done plates -> no clearing plan
+  // positions [4, 1, 7]: plate 0 interior, plates 1 (MIN) and 2 (MAX) on edges.
+  // Every probe is unsafe: plate 0's probes are blocked by the two edge plates;
+  // plate 1's probes are blocked because plate 2 is at MAX (and plate 1 at MIN blocks
+  // dir-L); plate 2's probes are blocked by plate 1 at MIN. planEdgeClear returns null
+  // (no done plates). So tier 3 fires and returns candidates[0].
+  // Under the OLD status-only sort candidates = [0, 1, 2] -> plate 0 (interior) wins.
+  // Under the NEW edge-first sort plates 1 and 2 (both at edges) sort before plate 0,
+  // so candidates[0] = plate 1 -> plate 1 is recommended.
+  // preferredDirs([4,1,7], 1) = ['L','R'] (pos 1 < 4) -> dir is 'L'.
+  const rec = recommendNext([4, 1, 7], m);
+  assert.equal(rec.type, 'probe');
+  assert.equal(rec.safe, false);
   assert.equal(rec.plate, 1);
   assert.equal(rec.dir, 'L');
+});
+
+test('a safe probe that clears an edge gets an edge-aware reason', () => {
+  const m = createMapping(3);
+  const rec = recommendNext([3, 5, 7], m);
+  assert.match(rec.reason, /edge/i);
 });
 
 test('applyProbe records shifts, advances positions, and marks done', () => {

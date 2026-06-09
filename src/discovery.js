@@ -1,4 +1,5 @@
-import { MIN, MAX, applyMove, isLegal } from './model.js';
+import { MIN, MAX, applyMove } from './model.js';
+import { planEdgeClear } from './solver.js';
 
 export function createMapping(n) {
   const coupling = Array.from({ length: n }, (_, i) => {
@@ -50,31 +51,8 @@ function candidateOrder(status) {
   return status === 'unstarted' ? 0 : 1;
 }
 
-// Among fully-mapped plates, find a legal known move that pulls a plate currently
-// at an edge toward center. Used to de-risk a future probe.
-function findPrepMove(positions, mapping) {
-  for (let i = 0; i < mapping.n; i++) {
-    if (mapping.status[i] !== 'done') continue;
-    for (const dir of ['L', 'R']) {
-      if (!isLegal(positions, mapping.coupling, i, dir)) continue;
-      const np = applyMove(positions, mapping.coupling, i, dir);
-      let improves = false;
-      for (let j = 0; j < mapping.n; j++) {
-        const atEdge = positions[j] === MIN || positions[j] === MAX;
-        if (atEdge && Math.abs(np[j] - 4) < Math.abs(positions[j] - 4)) improves = true;
-      }
-      if (improves) {
-        return {
-          type: 'prep',
-          plate: i,
-          dir,
-          reason:
-            'Move a known plate first to pull an edge plate toward center, making the next probe safe.',
-        };
-      }
-    }
-  }
-  return null;
+function atEdge(positions, i) {
+  return positions[i] <= MIN || positions[i] >= MAX;
 }
 
 export function recommendNext(positions, mapping) {
@@ -83,11 +61,15 @@ export function recommendNext(positions, mapping) {
     if (mapping.status[i] !== 'done') candidates.push(i);
   }
   if (candidates.length === 0) return null; // everything is mapped
-  candidates.sort(
-    (a, b) => candidateOrder(mapping.status[a]) - candidateOrder(mapping.status[b])
-  );
+  // Edge plates first (clear them before they block safe probing), then fresh before deferred.
+  candidates.sort((a, b) => {
+    const ea = atEdge(positions, a) ? 0 : 1;
+    const eb = atEdge(positions, b) ? 0 : 1;
+    if (ea !== eb) return ea - eb;
+    return candidateOrder(mapping.status[a]) - candidateOrder(mapping.status[b]);
+  });
 
-  // 1) a guaranteed-safe probe
+  // 1) a guaranteed-safe probe (edge plates preferred, pressed toward center)
   for (const plate of candidates) {
     for (const dir of preferredDirs(positions, plate)) {
       if (probeSafe(positions, mapping, plate, dir)) {
@@ -96,17 +78,29 @@ export function recommendNext(positions, mapping) {
           plate,
           dir,
           safe: true,
-          reason: 'Nothing this move can touch is at an edge, so it will go through cleanly.',
+          reason: atEdge(positions, plate)
+            ? 'On the edge — press toward center to clear it safely.'
+            : 'Nothing this move can touch is at an edge, so it will go through cleanly.',
         };
       }
     }
   }
 
-  // 2) a prep move that de-risks using known relationships
-  const prep = findPrepMove(positions, mapping);
-  if (prep) return prep;
+  // 2) an edge-clearing plan using already-mapped plates
+  const donePlates = [];
+  for (let i = 0; i < mapping.n; i++) {
+    if (mapping.status[i] === 'done') donePlates.push(i);
+  }
+  const moves = planEdgeClear(positions, mapping.coupling, donePlates);
+  if (moves && moves.length) {
+    return {
+      type: 'plan',
+      moves,
+      reason: 'Clear the edges first with these known moves, then the next probe is safe.',
+    };
+  }
 
-  // 3) least-risky probe (no guaranteed-safe option yet)
+  // 3) least-risky probe (no guaranteed-safe option, no clearing plan yet)
   const plate = candidates[0];
   const dir = preferredDirs(positions, plate)[0];
   return {
