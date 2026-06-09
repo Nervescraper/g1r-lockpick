@@ -25,10 +25,20 @@ const DIR_WORD = { L: 'Left', R: 'Right' };
 // Bump when a changelog update should re-show the "New" badge on the Changelog
 // button. Leave unchanged for silent edits (typos, rewording) that shouldn't
 // re-notify users who've already seen the latest entries.
-const CHANGELOG_VERSION = '1.1.0';
+const CHANGELOG_VERSION = '1.2.0';
 
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
+  {
+    date: '2026-06-09',
+    items: [
+      'Mapping now tracks where your slides are as you go — record each plate by dragging the slides or with the Moves with / Moves opposite buttons, and the board stays in sync.',
+      'The suggested next move is shown right on the board: a faint ghost marks where each slide is now, and the solid slide shows where the press lands.',
+      'New “Move slides” controls let you apply moves you’ve already mapped to reposition the slides — handy for pulling a slide off an edge before mapping it.',
+      'Edge warnings call out when a slide is on pin 1 or 7, so you can clear it before a probe jams the pick.',
+      'Prefer to map on your own? Turn off “Suggest moves” to hide the guidance and just use the board.',
+    ],
+  },
   {
     date: '2026-06-08',
     items: [
