@@ -35,6 +35,7 @@ const CHANGELOG = [
       'Mapping now tracks where your slides are as you go — record each plate by dragging the slides or with the Moves with / Moves opposite buttons, and the board stays in sync.',
       'The suggested next move is shown right on the board: a faint ghost marks where each slide is now, and the solid slide shows where the press lands.',
       'New “Move slides” controls let you apply moves you’ve already mapped to reposition the slides — handy for pulling a slide off an edge before mapping it.',
+      'Broke a pick? Reset the slides back to the start in one click — everything you’ve mapped is kept.',
       'Edge warnings call out when a slide is on pin 1 or 7, so you can clear it before a probe jams the pick.',
       'Prefer to map on your own? Turn off “Suggest moves” to hide the guidance and just use the board.',
     ],
@@ -1143,14 +1144,22 @@ function mappingView() {
       }
     }
   }
-  if (knownMoves.length) {
+  // Whether the slides have moved from the lock's reset point, so a Reset is meaningful.
+  const canReset = !done && !!state.initial && state.positions.join(',') !== state.initial.join(',');
+  if (knownMoves.length || canReset) {
+    const movesBlock = knownMoves.length
+      ? `<div class="muted" style="margin:2px 0 8px;font-size:12px">Reposition with moves you've already mapped (do these in the lock too) — e.g. to pull a slide off an edge before mapping it.</div>
+         <div class="ms-btns">${knownMoves
+           .map((mv) => `<span class="ap-btn" data-action="apply-move" data-plate="${mv.plate}" data-dir="${mv.dir}">${plateLabel(mv.plate)} <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span></span>`)
+           .join('')}</div>`
+      : '';
+    const resetBlock = canReset
+      ? `<div class="muted" style="margin:${knownMoves.length ? '12' : '2'}px 0 6px;font-size:12px">If the pick breaks, every slide snaps back to the start — reset here to match the lock (your mapping is kept).</div>
+         <span class="ap-btn" data-action="reset-pins">Reset</span>`
+      : '';
     const moveCard = document.createElement('div');
     moveCard.className = 'ap-card';
-    moveCard.innerHTML = `<div class="ap-h">Move slides — apply a known move</div>
-      <div class="muted" style="margin:2px 0 8px;font-size:12px">Reposition with moves you've already mapped (do these in the lock too) — e.g. to pull a slide off an edge before mapping it.</div>
-      <div class="ms-btns">${knownMoves
-        .map((mv) => `<span class="ap-btn" data-action="apply-move" data-plate="${mv.plate}" data-dir="${mv.dir}">${plateLabel(mv.plate)} <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span></span>`)
-        .join('')}</div>`;
+    moveCard.innerHTML = `<div class="ap-h">Move slides</div>${movesBlock}${resetBlock}`;
     col.appendChild(moveCard);
   }
 
@@ -1562,6 +1571,15 @@ appEl.addEventListener('click', (e) => {
       if (state.initial) {
         state.positions = state.initial.slice();
         if (state.stage === 'solve') state.plan = undefined; // re-plan from the reset point
+        if (state.stage === 'discovery') {
+          // A pick break snaps every slide back to the lock's start; keep the mapping
+          // learned so far, and re-base the in-progress recording against the reset state.
+          state.skipPlanKey = undefined;
+          if (state.activePlate != null) {
+            state.rec = createRecording(state.positions, state.activePlate, relFromMapping(state.activePlate));
+            state.recTouched = false;
+          }
+        }
       }
       break;
 
