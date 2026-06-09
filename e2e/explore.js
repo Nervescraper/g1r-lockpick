@@ -327,7 +327,54 @@ try {
     await d.shot('run-groups-done');
   });
 
-  // 7 · Save / Start over / load roundtrip.
+  // 7 · Reviewing a mapped plate must not simulate its move: the board stays at
+  // the committed positions until the player edits, and even then an illegal
+  // preview pins slides at the edge (styled as a jam) instead of drawing them
+  // off the grid. Reproduces a user report on the Gomez lock: reviewing P3 from
+  // the start positions previewed P5→8 and P4/P2→0, drawing broken trays.
+  await scenario(browser, 'review-mapped', { width: 1280, height: 900 }, async (d, page) => {
+    const gomez = EXPLORE_LOCKS.find((l) => l.id === 'gomez');
+    d.lock = gomez;
+    d.game = new (d.game.constructor)(gomez);
+    const session = {
+      stage: 'discovery', n: gomez.n, positions: gomez.initial.slice(), initial: gomez.initial.slice(),
+      mapping: { n: gomez.n, coupling: gomez.coupling, status: Array(gomez.n).fill('done') },
+      location: '', kind: 'Chest', description: '', contents: [], lockLoaded: true,
+    };
+    await page.addInitScript((s) => localStorage.setItem('g1r.session', JSON.stringify(s)), session);
+    await page.goto(BASE_URL);
+    await page.waitForSelector('.map-wrap');
+
+    await d.selectPlate(2); // review P3 — its links push P5 past 7 and P2/P4 past 1 from here
+    const labels = await page.$$eval('.tp-2dlabel', (els) => els.map((e) => e.textContent));
+    if (labels.some((t) => t.includes('→'))) {
+      d.issue('ui', `reviewing a mapped plate previews its move: labels ${JSON.stringify(labels)}`);
+    }
+    await d.expectBoardMatchesGame('while reviewing a mapped plate');
+    if (await page.$('.tp-tray.jam')) d.issue('ui', 'jam-styled tray shown before any edit during review');
+    await d.shot('review-passive');
+
+    // Start editing: re-tag P1 — the preview turns on and must clamp, not break.
+    await d.click('set-rel', '[data-plate="0"][data-rel="with"]');
+    const geom = await page.evaluate(() => {
+      // The tray bezel intentionally bleeds 5px past its holes (margin: 1px -5px),
+      // so allow that much; anything more means a slide drawn off the grid.
+      const BLEED = 7;
+      const out = { jams: document.querySelectorAll('.tp-tray.jam').length, outside: 0 };
+      for (const row of document.querySelectorAll('.tp-2drow')) {
+        const f = row.querySelector('.tp-field').getBoundingClientRect();
+        const t = row.querySelector('.tp-tray:not(.ghost)').getBoundingClientRect();
+        if (t.left < f.left - BLEED || t.right > f.right + BLEED) out.outside++;
+      }
+      return out;
+    });
+    if (geom.outside) d.issue('layout', `${geom.outside} tray(s) drawn outside the field during an illegal preview`);
+    if (!geom.jams) d.issue('ui', 'illegal preview shows no jam-styled tray — the would-be jam is invisible');
+    await d.checkOverflow('illegal preview during review');
+    await d.shot('review-editing-jam-preview');
+  });
+
+  // 8 · Save / Start over / load roundtrip.
   await scenario(browser, 'save-load', { width: 1280, height: 800 }, async (d, page) => {
     d.lock = LOCKS[0];
     d.game = new (d.game.constructor)(d.lock);

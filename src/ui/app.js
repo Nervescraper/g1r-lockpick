@@ -1168,6 +1168,9 @@ function mappingView() {
   // Jam mode: right after "It jammed", the rows' tag column becomes the
   // wiggled? column until the player taps Done (or does anything else).
   const jamMode = !!state.jamNotice && !done;
+  // Reviewing: the selected plate is already mapped — the player is most
+  // likely just checking its links, not re-recording (yet).
+  const reviewing = isActive && m.status[active] === 'done';
 
   // Board data derived from the in-progress recording: the solid slide sits at the
   // tentative landing (positionsOf), a faint ghost marks each moved plate's start, and
@@ -1175,7 +1178,12 @@ function mappingView() {
   // committed. With "Suggest moves" off we don't preview the suggested move on entry:
   // the board shows the real positions until you actually record a move (recTouched).
   // In jam mode nothing moved — show the committed positions, no preview.
-  const previewing = !jamMode && !!state.rec && (suggestEnabled() || state.recTouched);
+  // Reviewing a mapped plate also starts with NO preview: its pre-filled tags
+  // would otherwise simulate a move from the current positions, which can be
+  // out of bounds here (slides drawn past the edges). The preview begins only
+  // once the player actually edits (drags or re-tags).
+  const previewing = !jamMode && !!state.rec &&
+    (reviewing ? state.recTouched : suggestEnabled() || state.recTouched);
   const boardPositions = previewing ? positionsOf(state.rec) : state.positions;
   const ghosts = previewing
     ? boardPositions.map((p, i) => (p !== state.rec.baseline[i] ? state.rec.baseline[i] : null))
@@ -1234,6 +1242,9 @@ function mappingView() {
         slide you saw wiggle, then <b>Done</b>. Optional — missing some is fine.</div>`
     : !isActive
     ? `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`
+    : reviewing
+    ? `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Reviewing <b style="color:var(--gold)">${plateLabel(active)}</b>
+        — its links fill the <b>moved?</b> column. To re-record it, slide it in the lock, adjust the tags, then Save.</div>`
     : suggestEnabled() && state.rec
     ? `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Slide <b style="color:var(--gold)">${plateLabel(active)}</b>
         <span class="dir">${dirArrow(activeDir)} ${DIR_WORD[activeDir]}</span> in the lock, then fill the <b>moved?</b> column —
@@ -1323,6 +1334,8 @@ function mappingView() {
     : '';
   const saveBlock = jamMode
     ? `<span class="ap-btn primary" data-action="jam-done">Done ›</span> ${resetBtn}`
+    : reviewing && !state.recTouched
+    ? `<div class="muted">Viewing a mapped slide — nothing is being changed. Drag it or tap a tag to start re-recording.</div>`
     : isActive
     ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge — a real move can't do that (it would jam). Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
        <span class="ap-btn" data-action="probe-jammed" title="The move was blocked at an edge — nothing moved. Tells the app so it stops suggesting it here.">It jammed ⚠</span> ${resetBtn}

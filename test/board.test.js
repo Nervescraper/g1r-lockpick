@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { slideCols, dragToPosition, KEYWAY_COL, FIELD_COLS } from '../src/ui/board.js';
+import { slideCols, dragToPosition, drawablePosition, KEYWAY_COL, FIELD_COLS } from '../src/ui/board.js';
 
 test('slideCols: the pin is always the fixed keyway column', () => {
   for (let p = 1; p <= 7; p++) {
@@ -45,4 +45,13 @@ test('dragToPosition: dragging left (negative cols) raises the position', () => 
 test('dragToPosition: clamps to the 1..7 range', () => {
   assert.equal(dragToPosition(1, 5), 1);
   assert.equal(dragToPosition(7, -5), 7);
+});
+
+test('drawablePosition: in-range positions draw as-is', () => {
+  for (let p = 1; p <= 7; p++) assert.deepEqual(drawablePosition(p), { pos: p, jam: false });
+});
+
+test('drawablePosition: out-of-bounds previews pin to the edge and flag a jam', () => {
+  assert.deepEqual(drawablePosition(0), { pos: 1, jam: true }); // pushed past pin 1
+  assert.deepEqual(drawablePosition(8), { pos: 7, jam: true }); // pushed past pin 7
 });

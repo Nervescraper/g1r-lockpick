@@ -22,6 +22,15 @@ export function dragToPosition(startPos, dxCols) {
   return Math.max(1, Math.min(7, startPos - dxCols));
 }
 
+// A position to actually draw. Callers may pass an out-of-bounds position (a
+// previewed move that would jam, e.g. 0 or 8); drawing it literally would place
+// the tray outside the grid. Pin it to the edge instead and flag it, so the
+// renderer can style it as a would-be jam rather than emit broken layout.
+export function drawablePosition(pos) {
+  const clamped = Math.max(1, Math.min(7, pos));
+  return { pos: clamped, jam: clamped !== pos };
+}
+
 export function createBoard(host, s) {
   host.classList.add('tp');
   host.innerHTML = '';
@@ -41,7 +50,8 @@ export function createBoard(host, s) {
     const field = document.createElement('div');
     field.className = 'tp-field';
 
-    const { startCol, pinCol } = slideCols(s.positions[i]);
+    const drawn = drawablePosition(s.positions[i]);
+    const { startCol, pinCol } = slideCols(drawn.pos);
 
     // Ghost slide: a faint marker of where this plate currently is, drawn behind the
     // solid slide when the in-progress recording has moved it (caller passes `ghosts`).
@@ -56,6 +66,7 @@ export function createBoard(host, s) {
     const tray = document.createElement('div');
     tray.className = 'tp-tray';
     if (s.highlightPlate === i) tray.classList.add(s.highlightKind === 'next' ? 'next' : 'sel');
+    if (drawn.jam) tray.classList.add('jam'); // pinned at the edge it would be pushed past
     tray.style.gridColumn = `${startCol} / span 7`;
     field.appendChild(tray);
 
