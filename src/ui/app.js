@@ -1692,9 +1692,13 @@ appEl.addEventListener('click', (e) => {
       state.activePlate = 0;
       break;
     case 'apply-edit':
+      // Corrects the CURRENT positions only. The reset point (state.initial) is
+      // untouched: the physical lock always snaps back to its original positions
+      // on a pick break, so overwriting it would desync every later Reset. To
+      // change the reset point itself, adjust the pins in Setup and re-enter
+      // mapping (start-mapping re-snapshots it).
       state.editing = false;
       state.editBackup = undefined;
-      state.initial = state.positions.slice(); // corrected positions become the new reset point
       state.plan = undefined;
       break;
     case 'cancel-edit': discardPendingEdit(); break;

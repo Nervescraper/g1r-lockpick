@@ -221,6 +221,12 @@ try {
       for (let i = 0; i < d.lock.n; i++) await d.dragSlideTo(i, d.game.positions[i]);
       await d.click('apply-edit');
       await d.expectBoardMatchesGame('after Edit positions correction');
+
+      // The reset point must survive the edit: on a pick break the physical lock
+      // snaps to its ORIGINAL positions, so R must take the board there too.
+      await page.keyboard.press('r');
+      d.game.reset();
+      await d.expectBoardMatchesGame('after R following Edit positions');
     }
 
     // From here the plan must be real: follow it and the lock must open.
