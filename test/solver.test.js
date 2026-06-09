@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { solve, countSwitches } from '../src/solver.js';
+import { solve, countSwitches, planEdgeClear } from '../src/solver.js';
 import { applyMove, isSolved, legalMoves, MIN, MAX } from '../src/model.js';
 
 // helper: replay a solution, asserting every step stays in 1..7
@@ -325,4 +325,28 @@ test('A* makes a deep uncoupled 7-plate lock solvable within the node cap', () =
   assert.ok(plan !== null, 'expected a plan; heuristic-less search would hit the cap and return null');
   assert.equal(plan.length, 21);
   assert.ok(isSolved(replay(start, id7, plan)));
+});
+
+test('planEdgeClear returns an empty plan when already all-interior', () => {
+  assert.deepEqual(planEdgeClear([4, 4], [[1, 0], [0, 1]], [0, 1]), []);
+});
+
+test('planEdgeClear returns null when no mapped plate can clear an edge', () => {
+  // plate 0 is stuck at the MIN edge; only plate 1 is done and it moves only itself.
+  assert.equal(planEdgeClear([1, 4], [[1, 0], [0, 1]], [1]), null);
+});
+
+test('planEdgeClear returns null when there are no done plates and an edge exists', () => {
+  assert.equal(planEdgeClear([1, 4], [[1, 0], [0, 1]], []), null);
+});
+
+test('planEdgeClear finds a single known move that clears one edge', () => {
+  // plate 1 done, moves only itself; pressing it Left moves 1 -> 2 (interior).
+  assert.deepEqual(planEdgeClear([4, 1], [[1, 0], [0, 1]], [1]), [{ plate: 1, dir: 'L' }]);
+});
+
+test('planEdgeClear finds a multi-step sequence (no single move clears both edges)', () => {
+  // both plates at the MIN edge, independent self-moves: needs one Left press each.
+  const plan = planEdgeClear([1, 1], [[1, 0], [0, 1]], [0, 1]);
+  assert.deepEqual(plan, [{ plate: 0, dir: 'L' }, { plate: 1, dir: 'L' }]);
 });

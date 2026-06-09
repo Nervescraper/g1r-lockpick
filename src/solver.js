@@ -1,4 +1,4 @@
-import { applyMove, isSolved, legalMoves, GOAL } from './model.js';
+import { applyMove, isSolved, isLegal, legalMoves, allInterior, GOAL } from './model.js';
 import { MinHeap } from './heap.js';
 import { transpose, det, adjugate, matVec } from './linalg.js';
 
@@ -105,4 +105,34 @@ function reconstruct(parent, goalKey, startKey) {
     k = prev;
   }
   return moves.reverse();
+}
+
+// Breadth-first search for a shortest sequence of moves on already-mapped (`done`)
+// plates that drives every plate off the edges (all-interior). Only legal moves are
+// expanded, so a returned plan never strands a plate on an edge — directly avoiding
+// the "clear one edge, create another" whack-a-mole. Returns move[] (possibly empty
+// when already all-interior) or null when no done-plate sequence reaches all-interior.
+export function planEdgeClear(positions, coupling, donePlates, { maxNodes = 200_000 } = {}) {
+  if (allInterior(positions)) return [];
+  const start = positions.slice();
+  const visited = new Set([start.join(',')]);
+  const queue = [{ pos: start, path: [] }];
+  let count = 0;
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const plate of donePlates) {
+      for (const dir of ['L', 'R']) {
+        if (!isLegal(cur.pos, coupling, plate, dir)) continue;
+        const np = applyMove(cur.pos, coupling, plate, dir);
+        const key = np.join(',');
+        if (visited.has(key)) continue;
+        const path = [...cur.path, { plate, dir }];
+        if (allInterior(np)) return path;
+        visited.add(key);
+        queue.push({ pos: np, path });
+        if (++count > maxNodes) return null;
+      }
+    }
+  }
+  return null;
 }
