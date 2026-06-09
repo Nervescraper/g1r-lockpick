@@ -1508,6 +1508,25 @@ function couplingCard(coupling) {
 
 // ---------- events ----------
 
+// Snap every slide back to the lock's reset point (a pick break, or the player
+// re-syncing with the game). Shared by the Reset buttons and the R shortcut so
+// both behave identically: in Solve the plan is recomputed from the reset point;
+// in mapping the learned rows are kept, any skipped edge-clear plan is re-offered,
+// and the in-progress recording is re-based on the reset positions (otherwise the
+// board would keep previewing from a stale baseline).
+function resetPinsToInitial() {
+  if (!state.initial) return;
+  state.positions = state.initial.slice();
+  if (state.stage === 'solve') state.plan = undefined; // re-plan from the reset point
+  if (state.stage === 'discovery') {
+    state.skipPlanKey = undefined;
+    if (state.activePlate != null) {
+      state.rec = createRecording(state.positions, state.activePlate, relFromMapping(state.activePlate));
+      state.recTouched = false;
+    }
+  }
+}
+
 const clampN = (n) => Math.max(N_MIN, Math.min(N_MAX, n));
 
 function resizeN(n) {
@@ -1568,19 +1587,7 @@ appEl.addEventListener('click', (e) => {
       break;
     }
     case 'reset-pins':
-      if (state.initial) {
-        state.positions = state.initial.slice();
-        if (state.stage === 'solve') state.plan = undefined; // re-plan from the reset point
-        if (state.stage === 'discovery') {
-          // A pick break snaps every slide back to the lock's start; keep the mapping
-          // learned so far, and re-base the in-progress recording against the reset state.
-          state.skipPlanKey = undefined;
-          if (state.activePlate != null) {
-            state.rec = createRecording(state.positions, state.activePlate, relFromMapping(state.activePlate));
-            state.recTouched = false;
-          }
-        }
-      }
+      resetPinsToInitial();
       break;
 
     case 'select-plate': {
@@ -1788,8 +1795,7 @@ window.addEventListener('keydown', (e) => {
   // Works while the modal is open too: it just sends the plan back to step 1.
   if (e.key === 'r' || e.key === 'R') {
     if (!state.initial) return;
-    state.positions = state.initial.slice();
-    if (state.stage === 'solve') state.plan = undefined;
+    resetPinsToInitial();
     e.preventDefault();
     render(); // recomputes the plan from the reset positions
     if (planModalOpen) refreshPlanModal();
