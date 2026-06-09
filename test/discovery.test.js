@@ -133,6 +133,31 @@ test('edge-first sort picks an at-edge plate first in the tier-3 fallback', () =
   assert.equal(rec.dir, 'L');
 });
 
+test('a blocked press is skipped even when it would be the safe pick', () => {
+  const m = createMapping(3); // all interior, every probe safe
+  const first = recommendNext([4, 3, 5], m);
+  assert.equal(first.safe, true);
+  const rec = recommendNext([4, 3, 5], m, new Set([`${first.plate}|${first.dir}`]));
+  assert.equal(rec.type, 'probe');
+  assert.equal(`${rec.plate}|${rec.dir}` === `${first.plate}|${first.dir}`, false);
+});
+
+test('tier-3 fallback skips blocked presses and never presses into a wall', () => {
+  const m = createMapping(2); // nothing mapped, both plates on edges -> nothing safe
+  // [1, 7]: plate 0 can only go L (R is into the wall), plate 1 only R.
+  const rec = recommendNext([1, 7], m, new Set(['0|L']));
+  assert.equal(rec.type, 'probe');
+  assert.equal(rec.safe, false);
+  assert.deepEqual({ plate: rec.plate, dir: rec.dir }, { plate: 1, dir: 'R' });
+});
+
+test('reports stuck when every physically possible press is blocked', () => {
+  const m = createMapping(2);
+  const rec = recommendNext([1, 7], m, new Set(['0|L', '1|R']));
+  assert.equal(rec.type, 'stuck');
+  assert.match(rec.reason, /jam/i);
+});
+
 test('a safe probe that clears an edge gets an edge-aware reason', () => {
   const m = createMapping(3);
   const rec = recommendNext([3, 5, 7], m);

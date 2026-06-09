@@ -55,7 +55,10 @@ function atEdge(positions, i) {
   return positions[i] <= MIN || positions[i] >= MAX;
 }
 
-export function recommendNext(positions, mapping) {
+// `blocked` holds presses the player reported as jamming at the CURRENT
+// positions, as "plate|dir" strings — those are never suggested again until the
+// positions change (the caller keys its memory by position).
+export function recommendNext(positions, mapping, blocked = new Set()) {
   const candidates = [];
   for (let i = 0; i < mapping.n; i++) {
     if (mapping.status[i] !== 'done') candidates.push(i);
@@ -69,10 +72,18 @@ export function recommendNext(positions, mapping) {
     return candidateOrder(mapping.status[a]) - candidateOrder(mapping.status[b]);
   });
 
+  // A press must be physically possible (not into the wall the slide sits on)
+  // and not already reported as a jam here.
+  const pressable = (plate, dir) => {
+    if (dir === 'L' && positions[plate] >= MAX) return false;
+    if (dir === 'R' && positions[plate] <= MIN) return false;
+    return !blocked.has(`${plate}|${dir}`);
+  };
+
   // 1) a guaranteed-safe probe (edge plates preferred, pressed toward center)
   for (const plate of candidates) {
     for (const dir of preferredDirs(positions, plate)) {
-      if (probeSafe(positions, mapping, plate, dir)) {
+      if (pressable(plate, dir) && probeSafe(positions, mapping, plate, dir)) {
         return {
           type: 'probe',
           plate,
@@ -101,14 +112,23 @@ export function recommendNext(positions, mapping) {
   }
 
   // 3) least-risky probe (no guaranteed-safe option, no clearing plan yet)
-  const plate = candidates[0];
-  const dir = preferredDirs(positions, plate)[0];
+  for (const plate of candidates) {
+    for (const dir of preferredDirs(positions, plate)) {
+      if (!pressable(plate, dir)) continue;
+      return {
+        type: 'probe',
+        plate,
+        dir,
+        safe: false,
+        reason: 'No fully safe probe yet — some plates are at an edge. This is the least-risky option.',
+      };
+    }
+  }
+
+  // 4) every remaining press is known to jam at these positions
   return {
-    type: 'probe',
-    plate,
-    dir,
-    safe: false,
-    reason: 'No fully safe probe yet — some plates are at an edge. This is the least-risky option.',
+    type: 'stuck',
+    reason: 'Every untried press jams at these positions — move a mapped slide to change the layout, or reset the pins.',
   };
 }
 

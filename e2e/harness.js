@@ -206,10 +206,10 @@ export class Driver {
     await this.checkLabels('setup');
   }
 
-  // One successful press, recorded through the UI: make sure the right plate is
-  // active, set the press direction (drag if it differs from the default), tag
-  // every other plate that moved, and save.
-  async recordProbe(plate, dirCode, deltas, positionsBefore) {
+  // Stage a probe in the UI before pressing in the lock: make sure the right
+  // plate is being recorded and the press direction matches (a player decides,
+  // then presses). Required so a jam can be reported against the right press.
+  async prepareProbe(plate, dirCode, positionsBefore) {
     const recordingTxt = (await this.text('.map-wrap .ap-card')) || '';
     const recMatch = recordingTxt.match(/Recording\s*P(\d+)/);
     const active = recMatch ? +recMatch[1] - 1 : null;
@@ -217,7 +217,10 @@ export class Driver {
 
     const defaultDir = towardCenter(positionsBefore[plate]);
     if (dirCode !== defaultDir) await this.dragActiveTo(plate, positionsBefore[plate], dirCode);
+  }
 
+  // After a successful press: tag every other plate that moved, and save.
+  async tagAndSave(plate, dirCode, deltas) {
     for (let j = 0; j < this.lock.n; j++) {
       if (j === plate || deltas[j] === 0) continue;
       const rel = deltas[j] === deltas[plate] ? 'with' : 'opposite';
@@ -237,6 +240,12 @@ export class Driver {
     const sign = dirCode === 'L' ? 1 : -1;
     this.known[plate] = deltas.map((d) => d * sign + 0);
     return true;
+  }
+
+  // Convenience for scenarios that already pressed the lock successfully.
+  async recordProbe(plate, dirCode, deltas, positionsBefore) {
+    await this.prepareProbe(plate, dirCode, positionsBefore);
+    return this.tagAndSave(plate, dirCode, deltas);
   }
 
   // Apply a known (mapped) move via the "Move slides" panel, mirroring it in the game.
@@ -365,10 +374,15 @@ export class Driver {
         continue;
       }
 
-      // Press the chosen plate in the lock.
+      // Stage the recording, then press the chosen plate in the lock.
+      await this.prepareProbe(choice.plate, choice.dir, positions);
       const r = this.game.press(choice.plate, choice.dir);
       if (r.blocked) {
         blocked.add(`${posKey}|${choice.plate}${choice.dir}`);
+        // Tell the app the press jammed, so its guidance moves on.
+        const jamBtn = await this.page.$('[data-action="probe-jammed"]');
+        if (jamBtn) await jamBtn.click();
+        else this.issue('ui', 'press jammed but there is no control to tell the app');
         if (r.broke) {
           if (!brokeOnce) await this.shot('after-first-break');
           brokeOnce = true;
@@ -387,7 +401,7 @@ export class Driver {
         continue;
       }
 
-      if (!(await this.recordProbe(choice.plate, choice.dir, r.deltas, positions))) return false;
+      if (!(await this.tagAndSave(choice.plate, choice.dir, r.deltas))) return false;
       await this.expectBoardMatchesGame(`after saving P${choice.plate + 1}`);
     }
     this.issue('deadend', 'mapping did not finish within the round budget');

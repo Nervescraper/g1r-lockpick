@@ -9,7 +9,7 @@ import {
 import { coachingMessage } from './coaching.js';
 import { findCycles, expandedLayout, nextSectionStart, prevSectionStart } from '../cycles.js';
 import { planColumnCount } from './plan-columns.js';
-import { createMapping, recommendNext, allMapped } from '../discovery.js';
+import { createMapping, recommendNext, allMapped, defer } from '../discovery.js';
 import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
   exportLocks, encodeShare, parseImport, classifyImport, sameIdentity, sanitizeContents,
@@ -112,14 +112,14 @@ function freshSetup(n) {
 }
 
 function persist() {
-  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart } = state;
+  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes } = state;
   // The import and contents screens are transient overlays over the Lock step — never
   // persist them as a saved session stage (a reload would otherwise restore an empty one).
   const stage = state.stage === 'import' || state.stage === 'contents' ? 'lock' : state.stage;
   // While editing positions in Solve, changes stay pending until Apply — persist the
   // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
   const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
-  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart });
+  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes });
   syncLock();
 }
 
@@ -217,6 +217,19 @@ function relFromMapping(plate) {
   return rel;
 }
 
+// Presses the player reported as jams are remembered against the exact slide
+// positions they failed at (state.blockedProbes, "pos|plate|dir"). This returns
+// the ones that apply right now, in the "plate|dir" form recommendNext takes —
+// the same press at different positions is a different (untried) press.
+function blockedNow() {
+  const here = `${state.positions.join(',')}|`;
+  const set = new Set();
+  for (const k of state.blockedProbes || []) {
+    if (k.startsWith(here)) set.add(k.slice(here.length));
+  }
+  return set;
+}
+
 // Default plate to record: the safe-ordered suggestion if any, else first unmapped, else null.
 function suggestDefault() {
   const m = state.mapping;
@@ -224,7 +237,7 @@ function suggestDefault() {
   for (let i = 0; i < m.n; i++) if (m.status[i] !== 'done') { next = i; break; }
   // With suggestions on, jump to the recommended plate; off, just take the first unmapped.
   if (suggestEnabled()) {
-    const rec = recommendNext(state.positions, m);
+    const rec = recommendNext(state.positions, m, blockedNow());
     if (rec && rec.type === 'probe') next = rec.plate;
   }
   state.activePlate = next;
@@ -1058,7 +1071,7 @@ function mappingView() {
 
   const active = state.activePlate;
   const mapped = m.status.filter((s) => s === 'done').length;
-  const suggestion = allMapped(m) ? null : recommendNext(state.positions, m);
+  const suggestion = allMapped(m) ? null : recommendNext(state.positions, m, blockedNow());
 
   const col = document.createElement('div');
   col.className = 'map-wrap';
@@ -1090,6 +1103,19 @@ function mappingView() {
       : '';
   // Live edge coaching, recomputed from committed positions every render.
   const coachHtml = done ? '' : `<div class="coach muted" style="margin-top:6px">${coachingMessage(state.positions)}</div>`;
+  // One-shot acknowledgement after "It jammed": confirms the press is remembered
+  // and reminds the player what a jam costs. Cleared on the next click.
+  const jamHtml = state.jamNotice
+    ? `<div class="note" style="margin-top:6px">Noted — <b>${plateLabel(state.jamNotice.plate)}</b>
+        <span class="dir">${dirArrow(state.jamNotice.dir)} ${DIR_WORD[state.jamNotice.dir]}</span> jams at these positions
+        and won't be suggested again here. A jam is a mistake: if it was your pick's <b>second</b>, the pick broke and
+        every slide snapped back to the start — use Reset below to match.</div>`
+    : '';
+  // Tier 4: the player has reported every viable press as jammed at these positions.
+  const stuckHtml =
+    suggestEnabled() && suggestion && suggestion.type === 'stuck'
+      ? `<div class="note" style="margin-top:6px">${suggestion.reason}</div>`
+      : '';
   // The edge-clearing plan (tier 2 of recommendNext), rendered as a Done/Skip panel.
   // A Skip is remembered against the current positions so it stays dismissed until the
   // board changes (Save, or a Done'd move); any position change re-offers it.
@@ -1125,7 +1151,7 @@ function mappingView() {
   // Per-user toggle: off hides the app's move guidance (preview, suggested-press text,
   // recommended-plate jump, Done/Skip plan) but keeps the edge/jam warning.
   const suggestToggleHtml = `<label class="ap-kbd" style="margin-top:4px"><input type="checkbox" data-action="toggle-suggest"${suggestEnabled() ? ' checked' : ''}> Suggest moves</label>`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${headBody}${moveHintHtml}${coachHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${headBody}${moveHintHtml}${coachHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
   col.appendChild(head);
 
   const boardHost = document.createElement('div');
@@ -1178,9 +1204,11 @@ function mappingView() {
   const recInvalid = isActive && !!state.rec && !validRecording(state.rec);
   const saveBlock = isActive
     ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge. A successful press can't do that — it's a jam. Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
+       <span class="ap-btn" data-action="probe-jammed" title="The press was blocked at an edge — nothing moved. Tells the app so it stops suggesting this press here.">It jammed ⚠</span>
        <div class="muted" style="margin-top:8px">Saved plates turn <span style="color:var(--goal)">green</span>.</div>
-       <div class="note" style="margin-top:10px">If pressing a plate jams at an edge, you won't see its real connections — press the
-         other direction, or move that plate toward center first, then map it.</div>`
+       <div class="note" style="margin-top:10px">If pressing a plate jams at an edge, you won't see its real connections — click
+         <b>It jammed</b> so the app stops suggesting that press, then press the other direction or move the
+         offending plate toward center first.</div>`
     : '';
   const solveBlock = done
     ? `<div style="${isActive ? 'margin-top:12px' : ''}"><span class="ap-btn primary" data-action="goto-solve">Solve ›</span></div>`
@@ -1538,6 +1566,7 @@ appEl.addEventListener('click', (e) => {
   const t = e.target.closest('[data-action]');
   if (!t) return;
   const a = t.dataset.action;
+  if (a !== 'probe-jammed') state.jamNotice = undefined; // the acknowledgement is one-shot
 
   switch (a) {
     case 'n-dec': resizeN(clampN(state.n - 1)); break;
@@ -1601,9 +1630,24 @@ appEl.addEventListener('click', (e) => {
       break;
     case 'save-next': saveActivePlate(); break;
 
+    case 'probe-jammed': {
+      // The press the player just tried (the recording's plate + direction) was
+      // blocked: nothing moved. Remember it against the current positions so it
+      // is never suggested here again, deprioritize the plate, and move on.
+      const rec = state.rec;
+      if (rec) {
+        const dir = rec.deltaI === 1 ? 'L' : 'R';
+        (state.blockedProbes ??= []).push(`${state.positions.join(',')}|${rec.active}|${dir}`);
+        defer(state.mapping, rec.active);
+        state.jamNotice = { plate: rec.active, dir };
+        suggestDefault();
+      }
+      break;
+    }
+
     case 'plan-done': {
       // Apply the known edge-clearing sequence to the live positions, then re-seed.
-      const rec = allMapped(state.mapping) ? null : recommendNext(state.positions, state.mapping);
+      const rec = allMapped(state.mapping) ? null : recommendNext(state.positions, state.mapping, blockedNow());
       if (rec && rec.type === 'plan') {
         state.positions = applySequence(state.positions, state.mapping.coupling, rec.moves);
         state.skipPlanKey = undefined; // positions changed; future plans are fresh
@@ -1680,6 +1724,7 @@ appEl.addEventListener('click', (e) => {
         state.plan = undefined;
         state.activePlate = undefined;
         state.rec = null;
+        state.blockedProbes = []; // jam memory belongs to the previous lock
         if (state.stage === 'discovery') suggestDefault();
       }
       break;
