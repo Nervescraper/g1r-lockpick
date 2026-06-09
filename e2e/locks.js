@@ -81,4 +81,20 @@ export const EXPLORE_LOCKS = [
     ],
     initial: [3, 7, 1, 1, 1],
   },
+  {
+    // A real in-game lock (Gomez's chest, Old Camp Castle) reported as a hard
+    // one: three plates start on edges, dense couplings, det −1, and the
+    // optimal edge-free solution is 68 moves in long same-plate runs.
+    id: 'gomez',
+    label: 'Gomez · real 5-plate lock, 3 edge starts, 68-move solution',
+    n: 5,
+    coupling: [
+      [1, -1, 0, 0, -1],
+      [0, 1, 0, 0, 1],
+      [-1, -1, 1, -1, 1],
+      [0, 0, 0, 1, 0],
+      [1, 0, 1, 0, 1],
+    ],
+    initial: [6, 1, 2, 1, 7],
+  },
 ];

@@ -215,8 +215,10 @@ export class Driver {
     const active = recMatch ? +recMatch[1] - 1 : null;
     if (active !== plate) await this.selectPlate(plate);
 
-    const defaultDir = towardCenter(positionsBefore[plate]);
-    if (dirCode !== defaultDir) await this.dragActiveTo(plate, positionsBefore[plate], dirCode);
+    // The recording may have been seeded with either direction (the app honors
+    // its suggestion's direction); drag to the intended landing regardless —
+    // a no-op when the preview already sits there.
+    await this.dragActiveTo(plate, positionsBefore[plate], dirCode);
   }
 
   // After a successful press: tag every other plate that moved, and save.

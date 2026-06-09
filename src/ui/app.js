@@ -4,7 +4,7 @@ import { applyMove, moveDelta, isSolved, isLegal, GOAL } from '../model.js';
 import { solve, applySequence } from '../solver.js';
 import {
   createRecording, tagOf, positionsOf, couplingRow,
-  toggleTag, dragActive, dragOther, validRecording,
+  toggleTag, dragActive, dragOther, validRecording, setActiveDir,
 } from './mapping-record.js';
 import { coachingMessage } from './coaching.js';
 import { findCycles, expandedLayout, nextSectionStart, prevSectionStart } from '../cycles.js';
@@ -240,6 +240,23 @@ function blockedNow() {
   return set;
 }
 
+// Start (or restart) a recording for `plate` against the current positions. The
+// press direction defaults toward center, but when the app's suggestion is this
+// very plate, its direction wins — after a reported jam the recommender may pick
+// the away-from-center press, and the hint/preview must show THAT, not re-show
+// the press that just jammed.
+function seedRecording(plate) {
+  state.activePlate = plate;
+  state.rec = plate == null ? null : createRecording(state.positions, plate, relFromMapping(plate));
+  state.recTouched = false;
+  if (state.rec && suggestEnabled()) {
+    const rec = recommendNext(state.positions, state.mapping, blockedNow());
+    if (rec && rec.type === 'probe' && rec.plate === plate) {
+      state.rec = setActiveDir(state.rec, rec.dir === 'L' ? 1 : -1);
+    }
+  }
+}
+
 // Default plate to record: the safe-ordered suggestion if any, else first unmapped, else null.
 function suggestDefault() {
   const m = state.mapping;
@@ -250,9 +267,7 @@ function suggestDefault() {
     const rec = recommendNext(state.positions, m, blockedNow());
     if (rec && rec.type === 'probe') next = rec.plate;
   }
-  state.activePlate = next;
-  state.rec = next == null ? null : createRecording(state.positions, next, relFromMapping(next));
-  state.recTouched = false;
+  seedRecording(next);
 }
 
 function saveActivePlate() {
@@ -631,9 +646,7 @@ function railEl() {
 // tentative in state.rec until Save commits them — the board can't silently drift.
 function onMapClick(i) {
   if (state.activePlate === i) return; // already recording this plate; keep its tags
-  state.activePlate = i;
-  state.rec = createRecording(state.positions, i, relFromMapping(i));
-  state.recTouched = false;
+  seedRecording(i);
   render();
 }
 function onMapDrag(i, pos) {
@@ -1569,10 +1582,7 @@ function resetPinsToInitial() {
   if (state.stage === 'solve') state.plan = undefined; // re-plan from the reset point
   if (state.stage === 'discovery') {
     state.skipPlanKey = undefined;
-    if (state.activePlate != null) {
-      state.rec = createRecording(state.positions, state.activePlate, relFromMapping(state.activePlate));
-      state.recTouched = false;
-    }
+    if (state.activePlate != null) seedRecording(state.activePlate);
   }
 }
 
@@ -1641,9 +1651,7 @@ appEl.addEventListener('click', (e) => {
       break;
 
     case 'select-plate': {
-      const p = +t.dataset.plate;
-      state.activePlate = p;
-      state.rec = createRecording(state.positions, p, relFromMapping(p));
+      seedRecording(+t.dataset.plate);
       break;
     }
     case 'set-rel':
@@ -1695,11 +1703,8 @@ appEl.addEventListener('click', (e) => {
       if (state.mapping.status[plate] === 'done' && isLegal(state.positions, state.mapping.coupling, plate, dir)) {
         state.positions = applyMove(state.positions, state.mapping.coupling, plate, dir);
         state.skipPlanKey = undefined; // positions changed → re-offer any edge plan
-        if (state.activePlate != null) {
-          // re-base the in-progress recording against the new positions
-          state.rec = createRecording(state.positions, state.activePlate, relFromMapping(state.activePlate));
-          state.recTouched = false;
-        }
+        // re-base the in-progress recording against the new positions
+        if (state.activePlate != null) seedRecording(state.activePlate);
       }
       break;
     }
