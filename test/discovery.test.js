@@ -158,6 +158,28 @@ test('reports stuck when every possible press is blocked and nothing is mapped',
   assert.match(rec.reason, /jam/i);
 });
 
+test('a link learned from a jam wiggle rules out presses that must jam', () => {
+  const m = createMapping(3);
+  // A reported wiggle taught us: pressing plate 0 moves plate 2 the same way.
+  m.coupling[0][2] = 1;
+  m.status[0] = 'partial';
+  // Plate 0 at MIN, plate 2 at MAX: pressing plate 0 Left would push plate 2 to
+  // 8 — a certain jam by what's known, so it must not be suggested even though
+  // the player never reported that exact press at these positions.
+  const rec = recommendNext([1, 4, 7], m);
+  assert.equal(rec.type, 'probe');
+  assert.deepEqual({ plate: rec.plate, dir: rec.dir }, { plate: 2, dir: 'R' });
+});
+
+test('unknown (zero) cells imply nothing — wiggle reports may be incomplete', () => {
+  const m = createMapping(2);
+  // Nothing learned beyond the self-cells: with no plate on a hostile edge for
+  // the probed plate itself, the probe is still offered (conservatively risky).
+  const rec = recommendNext([1, 7], m);
+  assert.equal(rec.type, 'probe');
+  assert.equal(rec.safe, false);
+});
+
 test('falls back to an edge-reducing plan when a full clear is impossible', () => {
   const m = createMapping(3);
   m.status[0] = 'done'; // mapped: moves only itself (default row)

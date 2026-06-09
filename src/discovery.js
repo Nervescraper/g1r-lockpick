@@ -1,4 +1,4 @@
-import { MIN, MAX, applyMove, isLegal } from './model.js';
+import { MIN, MAX, applyMove, isLegal, dirSign } from './model.js';
 import { planEdgeClear, planEdgeReduce } from './solver.js';
 
 export function createMapping(n) {
@@ -72,12 +72,24 @@ export function recommendNext(positions, mapping, blocked = new Set()) {
     return candidateOrder(mapping.status[a]) - candidateOrder(mapping.status[b]);
   });
 
-  // A press must be physically possible (not into the wall the slide sits on)
-  // and not already reported as a jam here.
+  // A press must be physically possible (not into the wall the slide sits on),
+  // not already reported as a jam here, and not a *certain* jam by what's been
+  // learned: nonzero cells (from a recorded probe or a reported wiggle) are
+  // exact, so a known link that would push a plate past an edge disqualifies
+  // the press. Zero cells may merely be unlearned — wiggle reports can be
+  // incomplete — so they imply nothing.
   const pressable = (plate, dir) => {
     if (dir === 'L' && positions[plate] >= MAX) return false;
     if (dir === 'R' && positions[plate] <= MIN) return false;
-    return !blocked.has(`${plate}|${dir}`);
+    if (blocked.has(`${plate}|${dir}`)) return false;
+    const s = dirSign(dir);
+    const row = mapping.coupling[plate];
+    for (let j = 0; j < row.length; j++) {
+      if (row[j] === 0) continue;
+      const np = positions[j] + s * row[j];
+      if (np < MIN || np > MAX) return false;
+    }
+    return true;
   };
 
   // 1) a guaranteed-safe probe (edge plates preferred, pressed toward center)

@@ -22,22 +22,26 @@ export class SimulatedLock {
 
   // Press `plate` in direction 'L'|'R'. Returns what the player sees:
   //  - ok:      { blocked: false, deltas }   slides moved by `deltas`
-  //  - mistake: { blocked: true, broke: false }  nothing moved, pick damaged
-  //  - break:   { blocked: true, broke: true }   pick snapped, slides reset
+  //  - mistake: { blocked: true, broke: false, wiggle }  nothing moved, pick damaged
+  //  - break:   { blocked: true, broke: true, wiggle }   pick snapped, slides reset
+  // `wiggle` lists the plates the game visibly wiggles on a jam — the ones the
+  // press would have pushed past an edge.
   press(plate, dir) {
     const s = dir === 'L' ? 1 : -1;
     const deltas = this.coupling[plate].map((v) => s * v + 0);
     const next = this.positions.map((p, j) => p + deltas[j]);
     if (next.some((v) => v < MIN || v > MAX)) {
+      const wiggle = [];
+      next.forEach((v, j) => { if (v < MIN || v > MAX) wiggle.push(j); });
       this.totalMistakes++;
       if (this.mistakes >= MISTAKES_PER_PICK) {
         this.breaks++;
         this.mistakes = 0;
         this.positions = this.initial.slice();
-        return { blocked: true, broke: true };
+        return { blocked: true, broke: true, wiggle };
       }
       this.mistakes++;
-      return { blocked: true, broke: false };
+      return { blocked: true, broke: false, wiggle };
     }
     this.positions = next;
     return { blocked: false, deltas };

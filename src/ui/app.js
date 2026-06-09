@@ -1,6 +1,6 @@
 import { createBoard } from './board.js';
 import { nextActivePlate } from './active-plate.js';
-import { applyMove, moveDelta, isSolved, isLegal, GOAL } from '../model.js';
+import { applyMove, moveDelta, isSolved, isLegal, GOAL, MIN, MAX } from '../model.js';
 import { solve, applySequence } from '../solver.js';
 import {
   createRecording, tagOf, positionsOf, couplingRow,
@@ -1089,6 +1089,35 @@ function setupPanel() {
 
 // ---------- Mapping (unified into the board) ----------
 
+// The post-jam note: what the jam cost, plus optional wiggle capture. The game
+// wiggles the plates the press would have pushed past an edge; each one the
+// player SAW pins down one cell of the jammed plate's row exactly (a wiggling
+// plate sits on an edge, so the push direction is known). Reports are trusted
+// but never assumed complete — untapped plates teach nothing.
+function jamNoticeHtml(jn) {
+  const lead = jn.broke
+    ? `That jam was the pick's <b>second</b> mistake — the pick broke and every slide snapped back to the start.
+       The board has been reset to match; your mapping and jam notes are kept.`
+    : `Noted — <b>${plateLabel(jn.plate)}</b> <span class="dir">${dirArrow(jn.dir)} ${DIR_WORD[jn.dir]}</span>
+       jams at these positions and won't be suggested again here. <b>1 mistake on this pick</b> — another jam breaks it.`;
+  const chips = [];
+  for (let j = 0; j < state.n; j++) {
+    if (j === jn.plate) continue;
+    const pj = jn.positions[j];
+    if (pj > MIN && pj < MAX) continue; // only a plate on an edge can be the blocker
+    const cell = (pj >= MAX ? 1 : -1) * (jn.dir === 'L' ? 1 : -1);
+    const on = state.mapping.coupling[jn.plate][j] === cell;
+    chips.push(`<span class="ap-btn${on ? ' primary' : ''}" data-action="jam-wiggle" data-plate="${j}">${plateLabel(j)}</span>`);
+  }
+  const wiggle = chips.length
+    ? `<div class="muted" style="margin-top:8px">Optional: did you see which slides <i>wiggled</i> on the jam? Tap the ones
+        you saw — each pins down one of ${plateLabel(jn.plate)}'s links (tap again to undo). It's fine to have missed
+        some; only what you tap is used.</div>
+       <div style="margin-top:4px">${chips.join(' ')}</div>`
+    : '';
+  return `<div class="note" style="margin-top:6px">${lead}${wiggle}</div>`;
+}
+
 function mappingView() {
   const m = state.mapping;
   if (state.activePlate === undefined) suggestDefault();
@@ -1127,16 +1156,10 @@ function mappingView() {
       : '';
   // Live edge coaching, recomputed from committed positions every render.
   const coachHtml = done ? '' : `<div class="coach muted" style="margin-top:6px">${coachingMessage(state.positions)}</div>`;
-  // One-shot acknowledgement after "It jammed": confirms the press is remembered
-  // and reports what it cost the pick. Cleared on the next click.
-  const jamHtml = state.jamNotice
-    ? state.jamNotice.broke
-      ? `<div class="note" style="margin-top:6px">That jam was the pick's <b>second</b> mistake — the pick broke and
-          every slide snapped back to the start. The board has been reset to match; your mapping and jam notes are kept.</div>`
-      : `<div class="note" style="margin-top:6px">Noted — <b>${plateLabel(state.jamNotice.plate)}</b>
-          <span class="dir">${dirArrow(state.jamNotice.dir)} ${DIR_WORD[state.jamNotice.dir]}</span> jams at these positions
-          and won't be suggested again here. <b>1 mistake on this pick</b> — another jam breaks it.</div>`
-    : '';
+  // Acknowledgement after "It jammed": confirms the press is remembered, reports
+  // what it cost the pick, and offers the optional wiggle capture. Cleared on
+  // the next click that isn't part of the jam flow.
+  const jamHtml = state.jamNotice ? jamNoticeHtml(state.jamNotice) : '';
   // Standing pick-damage line, so the stakes of the next probe are always visible.
   const pickHtml = done
     ? ''
@@ -1631,7 +1654,9 @@ appEl.addEventListener('click', (e) => {
   const t = e.target.closest('[data-action]');
   if (!t) return;
   const a = t.dataset.action;
-  if (a !== 'probe-jammed') state.jamNotice = undefined; // the acknowledgement is one-shot
+  // The jam acknowledgement stays up through the jam flow (so wiggles can be
+  // tapped) and clears on any other action.
+  if (a !== 'probe-jammed' && a !== 'jam-wiggle') state.jamNotice = undefined;
 
   switch (a) {
     case 'n-dec': resizeN(clampN(state.n - 1)); break;
@@ -1705,7 +1730,9 @@ appEl.addEventListener('click', (e) => {
         (state.blockedProbes ??= []).push(`${state.positions.join(',')}|${rec.active}|${dir}`);
         defer(state.mapping, rec.active);
         const broke = (state.pickMistakes || 0) + 1 >= 2;
-        state.jamNotice = { plate: rec.active, dir, broke };
+        // Snapshot the jam-time positions: the wiggle chips must reflect where
+        // the slides were when it jammed, even after a break auto-resets them.
+        state.jamNotice = { plate: rec.active, dir, broke, positions: state.positions.slice() };
         if (broke) {
           state.picksBroken = (state.picksBroken || 0) + 1;
           resetPinsToInitial(); // also zeroes pickMistakes (fresh pick)
@@ -1730,6 +1757,23 @@ appEl.addEventListener('click', (e) => {
     case 'plan-skip':
       state.skipPlanKey = state.positions.join(','); // dismiss until positions change
       break;
+    case 'jam-wiggle': {
+      // The player saw this plate wiggle on the jam they just reported. A
+      // wiggling plate was about to be pushed past the edge it sits on, which
+      // pins the jammed plate's link to it exactly. Tap again to undo. Absence
+      // of a tap means nothing — the player may simply not have seen it.
+      const jn = state.jamNotice;
+      if (!jn || !state.mapping) break;
+      const j = +t.dataset.plate;
+      const pj = jn.positions[j];
+      if (j === jn.plate || (pj > MIN && pj < MAX)) break;
+      const cell = (pj >= MAX ? 1 : -1) * (jn.dir === 'L' ? 1 : -1);
+      const row = state.mapping.coupling[jn.plate];
+      row[j] = row[j] === cell ? 0 : cell;
+      defer(state.mapping, jn.plate); // the row carries partial knowledge now
+      suggestDefault(); // learned links can rule out (or reopen) suggestions
+      break;
+    }
     case 'apply-move': {
       // Manually apply a known move (press of a mapped plate) to reposition the slides.
       const plate = +t.dataset.plate;

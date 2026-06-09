@@ -13,6 +13,17 @@ const DIR_CODE = { Left: 'L', Right: 'R' };
 const MIN = 1, MAX = 7;
 const towardCenter = (pos) => (pos > 4 ? 'R' : 'L');
 
+// Deterministic PRNG so "did the player notice that wiggle?" varies across jams
+// but is identical run to run for a given lock.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export class Driver {
   constructor(page, lock, { artifactsDir, shotPrefix = '' } = {}) {
     this.page = page;
@@ -23,6 +34,14 @@ export class Driver {
     this.shotPrefix = shotPrefix;
     this.shotCount = 0;
     this.known = {}; // plate -> coupling row the player has recorded (their own notes)
+    // Wiggles are easy to miss in the game; this player notices each one with
+    // ~60% probability (seeded by lock id) so the incomplete-info path is
+    // exercised: untapped chips must never corrupt the mapping.
+    let seed = 0;
+    for (const c of lock.id) seed = (seed * 31 + c.charCodeAt(0)) | 0;
+    this.rng = mulberry32(seed || 1);
+    this.wigglesSeen = 0;
+    this.wigglesMissed = 0;
     if (artifactsDir) mkdirSync(artifactsDir, { recursive: true });
 
     page.on('console', (msg) => {
@@ -221,12 +240,23 @@ export class Driver {
     await this.dragActiveTo(plate, positionsBefore[plate], dirCode);
   }
 
-  // After a successful press: tag every other plate that moved, and save.
+  // After a successful press: tag every other plate so the recording matches
+  // what the lock did, and save. Tags may arrive pre-filled (links learned from
+  // reported wiggles seed them), and the buttons TOGGLE — so read the current
+  // state and only click where it differs from what was observed.
   async tagAndSave(plate, dirCode, deltas) {
     for (let j = 0; j < this.lock.n; j++) {
-      if (j === plate || deltas[j] === 0) continue;
-      const rel = deltas[j] === deltas[plate] ? 'with' : 'opposite';
-      await this.click('set-rel', `[data-plate="${j}"][data-rel="${rel}"]`);
+      if (j === plate) continue;
+      const desired = deltas[j] === 0 ? null : deltas[j] === deltas[plate] ? 'with' : 'opposite';
+      const current = await this.page.evaluate((jj) => {
+        if (document.querySelector(`[data-action="set-rel"][data-plate="${jj}"][data-rel="with"].on-with`)) return 'with';
+        if (document.querySelector(`[data-action="set-rel"][data-plate="${jj}"][data-rel="opposite"].on-opp`)) return 'opposite';
+        return null;
+      }, j);
+      if (current === desired) continue;
+      // Clicking the desired tag sets it (overwriting the other); with nothing
+      // desired, clicking the lit one clears it.
+      await this.click('set-rel', `[data-plate="${j}"][data-rel="${desired ?? current}"]`);
     }
 
     const saveBtn = await this.page.$('[data-action="save-next"]');
@@ -387,6 +417,16 @@ export class Driver {
         const jamBtn = await this.page.$('[data-action="probe-jammed"]');
         if (jamBtn) await jamBtn.click();
         else this.issue('ui', 'press jammed but there is no control to tell the app');
+        // The game wiggles the plates the press would have pushed out; report
+        // the ones this player happened to notice through the optional chips
+        // (every wiggler sits on an edge, so a chip must exist for each).
+        for (const j of r.wiggle || []) {
+          if (j === choice.plate) continue;
+          if (this.rng() >= 0.6) { this.wigglesMissed++; continue; } // didn't catch it
+          const chip = await this.page.$(`[data-action="jam-wiggle"][data-plate="${j}"]`);
+          if (chip) { await chip.click(); this.wigglesSeen++; }
+          else this.issue('ui', `the lock wiggled P${j + 1} on the jam but there is no chip to report it`);
+        }
         if (r.broke && !brokeOnce) {
           await this.shot('after-first-break');
           brokeOnce = true;

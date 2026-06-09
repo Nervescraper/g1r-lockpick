@@ -48,6 +48,7 @@ async function runLock(browser, lock, opts = {}) {
     observations: driver.observations || [],
     mistakes: driver.game.totalMistakes,
     breaks: driver.game.breaks,
+    wiggles: `${driver.wigglesSeen} seen / ${driver.wigglesMissed} missed`,
   };
 }
 
@@ -69,7 +70,7 @@ try {
     }[lock.id] || {};
     const res = await runLock(browser, lock, opts);
     if (!res.ok || res.issues.length) failed = true;
-    console.log(`\n=== ${lock.id}: ${res.ok ? 'SOLVED through the UI' : 'DID NOT SOLVE'} (mistakes: ${res.mistakes}, breaks: ${res.breaks}) ===`);
+    console.log(`\n=== ${lock.id}: ${res.ok ? 'SOLVED through the UI' : 'DID NOT SOLVE'} (mistakes: ${res.mistakes}, breaks: ${res.breaks}, wiggles: ${res.wiggles}) ===`);
     for (const i of res.issues) console.log(`  [${i.kind}] ${i.detail}`);
     if (!res.issues.length) console.log('  no issues recorded');
     for (const o of res.observations) console.log(`  (friction) ${o.detail}`);
