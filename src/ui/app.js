@@ -1338,7 +1338,9 @@ function mappingView() {
     ? `<div class="muted">Viewing a mapped slide — nothing is being changed. Drag it or tap a tag to start re-recording.</div>`
     : isActive
     ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge — a real move can't do that (it would jam). Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
-       <span class="ap-btn" data-action="probe-jammed" title="The move was blocked at an edge — nothing moved. Tells the app so it stops suggesting it here.">It jammed ⚠</span> ${resetBtn}
+       <span class="ap-btn" data-action="probe-jammed" title="The move was blocked at an edge — nothing moved. Tells the app so it stops suggesting it here.">It jammed ⚠</span>${
+         reviewing ? ` <span class="ap-btn" data-action="cancel-rerecord" title="Discard these edits — keep the plate's saved links and positions.">Cancel</span>` : ''
+       } ${resetBtn}
        <div class="muted" style="margin-top:8px">Move blocked instead? Click <b>It jammed</b> — a jam shows no links, and the app will steer around it.</div>`
     : '';
   const solveBlock = done
@@ -1845,6 +1847,11 @@ appEl.addEventListener('click', (e) => {
       break;
     case 'jam-done':
       break; // jamNotice already cleared above — rows return to the moved? column
+    case 'cancel-rerecord':
+      // An accidental drag/re-tag while reviewing a mapped plate: discard the
+      // edits and return to the passive review (saved links, committed board).
+      if (state.activePlate != null) seedRecording(state.activePlate);
+      break;
     case 'jam-wiggle': {
       // The player saw this plate wiggle on the jam they just reported: linked
       // to the jammed plate for sure. The SIGN is only known when this slide is

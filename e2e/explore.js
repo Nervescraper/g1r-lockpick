@@ -372,6 +372,19 @@ try {
     if (!geom.jams) d.issue('ui', 'illegal preview shows no jam-styled tray — the would-be jam is invisible');
     await d.checkOverflow('illegal preview during review');
     await d.shot('review-editing-jam-preview');
+
+    // The edit was an accident: Cancel must discard it and restore the passive
+    // review — committed board, saved links, no jam styling.
+    const cancel = await page.$('[data-action="cancel-rerecord"]');
+    if (!cancel) { d.issue('ui', 'no Cancel control while re-recording a mapped plate'); return; }
+    await cancel.click();
+    await d.expectBoardMatchesGame('after cancelling a re-record');
+    const after = await page.$$eval('.tp-2dlabel', (els) => els.map((e) => e.textContent));
+    if (after.some((t) => t.includes('→'))) d.issue('ui', 'Cancel left a previewed move on the board');
+    if (await page.$('.tp-tray.jam')) d.issue('ui', 'Cancel left jam styling on the board');
+    const tagRestored = await page.$('[data-action="set-rel"][data-plate="0"][data-rel="opposite"].on-opp');
+    if (!tagRestored) d.issue('ui', 'Cancel did not restore the saved tag (P1 should be back to opposite)');
+    await d.shot('review-cancelled');
   });
 
   // 8 · Save / Start over / load roundtrip.
