@@ -39,7 +39,10 @@ game**, there are two cases: a planned move **jams** (nothing moves — hit **It
 that slide's row is marked as provably mis-recorded, with the wiggle capture to pin the bad
 link), or the pins **drift** from the board (use **Edit positions** to enter where they
 really are: the app compares the drift against the moves you made and names the rows most
-likely mis-recorded, with a one-tap jump to review them).
+likely mis-recorded, with a one-tap jump to review them). While **mapping**, the same drift
+is handled by **"Lock doesn't match?"**: it rewinds your recent moves one physical undo at a
+time — undoing a move is always safe — and the first state where lock and board agree again
+names the step that lied, leaving everything back in sync.
 
 ## Keyboard shortcuts
 

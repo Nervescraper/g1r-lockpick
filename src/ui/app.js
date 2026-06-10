@@ -41,6 +41,7 @@ const CHANGELOG = [
       'Sharing is quicker: the Lock open! screen shows the lock’s share code with a Copy button, and pasting a code on the Lock page imports it on the spot.',
       'Mis-slid in the game? “Oops…” counts the stray jam (while mapping or solving) so pick durability stays in sync — the second mistake breaks the pick and the board resets itself to match.',
       'Solution failed in the game? If the planned move jammed, “It jammed” now works mid-solve — that slide’s row is provably wrong, so it’s marked for re-recording with the full wiggle capture. If the pins drifted instead, enter the real positions via “Edit positions” and the app names the rows that could explain it, with one-tap review.',
+      'Board stopped matching the lock while mapping? “Lock doesn’t match?” rewinds your recent moves one undo at a time — the first state where lock and board agree again names the mis-recorded slide, re-opens its row, and leaves everything in sync (with a fix-by-hand fallback).',
     ],
   },
   {
@@ -126,14 +127,14 @@ function freshSetup(n) {
 }
 
 function persist() {
-  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken } = state;
+  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken, stepLog } = state;
   // The import and contents screens are transient overlays over the Lock step — never
   // persist them as a saved session stage (a reload would otherwise restore an empty one).
   const stage = state.stage === 'import' || state.stage === 'contents' ? 'lock' : state.stage;
   // While editing positions in Solve, changes stay pending until Apply — persist the
   // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
   const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
-  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken });
+  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken, stepLog });
   syncLock();
 }
 
@@ -311,6 +312,7 @@ function saveActivePlate() {
   const rec = state.rec;
   if (!rec) return;
   if (!validRecording(rec)) return; // a successful press can't push a slide off an edge (that's a jam)
+  logStep(rec.active, rec.deltaI === 1 ? 'L' : 'R'); // rewindable, like any board-moving step
   state.mapping.coupling[rec.active] = couplingRow(rec);
   state.positions = positionsOf(rec); // commit the live, recorded positions
   state.mapping.status[rec.active] = 'done';
@@ -706,9 +708,10 @@ function onDragPosition(i, pos) {
   render();
 }
 
-// True while the board is in a position-editing context (Setup, or Solve's Edit mode).
+// True while the board is in a position-editing context (Setup, or the Edit
+// mode of Solve and Map the lock).
 function isPositionEditing() {
-  return state.stage === 'setup' || (state.stage === 'solve' && state.editing);
+  return state.stage === 'setup' || ((state.stage === 'solve' || state.stage === 'discovery') && state.editing);
 }
 
 // Keyboard pin entry shared by both editing contexts: 1–7 sets the active plate's pin and
@@ -1191,9 +1194,96 @@ function jamNoticeHtml(jn) {
   return `<div class="note" style="margin-top:6px">${lead}${auto}${missed}</div>`;
 }
 
+// The drift diagnosis, shown after an Edit positions that contradicted what the
+// executed moves predicted — in Solve (plan moves) and in mapping (journaled
+// repositioning moves) alike. Names the drifted slides and the rows that could
+// explain them, with one-tap review.
+function driftNoteEl() {
+  const rep = state.driftReport;
+  const where = rep.drifted.map(plateLabel).join(', ');
+  const top = rep.suspects.slice(0, 2);
+  const note = document.createElement('div');
+  note.innerHTML = `<div class="note" style="margin:0 0 10px">The lock isn't where the mapping predicted — off on <b>${where}</b>.${
+    top.length
+      ? ` Most likely mis-recorded: ${top.map((sp) => `<b>${plateLabel(sp.plate)}</b>`).join(', then ')}.`
+      : ' None of the executed moves can explain it alone — re-check the rows you trust least, and that no move was missed or doubled.'
+  }<div style="margin-top:6px">${
+    top.length
+      ? top.map((sp) => `<span class="ap-btn" data-action="drift-review" data-plate="${sp.plate}">Review ${plateLabel(sp.plate)} ›</span>`).join(' ')
+      : ''
+  }</div></div>`;
+  return note.firstElementChild;
+}
+
 function mappingView() {
   const m = state.mapping;
   if (state.activePlate === undefined) suggestDefault();
+
+  // ---- "Lock doesn't match?" rewind mode: walk the player backwards through
+  // their own logged moves until lock and board agree again. Each shown step
+  // asks for ONE physical undo and one visual comparison. ----
+  if (state.walkback) {
+    const col = document.createElement('div');
+    col.className = 'map-wrap';
+    const log = state.stepLog || [];
+    const u = state.walkback.undone;
+    const card = document.createElement('div');
+    card.className = 'ap-card';
+    if (u >= log.length) {
+      card.innerHTML = `<div class="ap-h">Find the bad step · nothing left to rewind</div>
+        <div style="font-size:14px;color:#fff;margin-top:6px">Every logged move is undone and the lock still doesn't match —
+          the divergence is older than these steps.</div>
+        <div class="muted" style="margin-top:4px">Set the board to match the lock by hand, then re-check the rows you trust least.</div>
+        <div style="margin-top:12px"><span class="ap-btn primary" data-action="walkback-hand">Fix by hand ›</span></div>`;
+      col.appendChild(card);
+      const host = document.createElement('div');
+      col.appendChild(host);
+      createBoard(host, { positions: log.length ? log[0].before : state.positions });
+      return col;
+    }
+    const step = log[log.length - 1 - u];
+    const undoDir = step.dir === 'L' ? 'R' : 'L';
+    card.innerHTML = `<div class="ap-h">Find the bad step · rewinding ${u + 1} of ${log.length}</div>
+      <div style="font-size:14px;color:#fff;margin-top:6px">Undo your ${plateLabel(step.plate)} ${DIR_WORD[step.dir]}:
+        slide <b style="color:var(--gold)">${plateLabel(step.plate)}</b>
+        <span class="dir">${dirArrow(undoDir)} ${DIR_WORD[undoDir]}</span> in the lock.</div>
+      <div class="muted" style="margin-top:4px">The board below shows where everything should be after that undo. Does the lock match it now?</div>
+      <div style="margin-top:12px">
+        <span class="ap-btn primary" data-action="walkback-match">It matches now ✓</span>
+        <span class="ap-btn" data-action="walkback-more">Still different — rewind more</span>
+        <span class="linklike" data-action="walkback-hand" style="margin-left:8px">fix by hand instead…</span>
+      </div>`;
+    col.appendChild(card);
+    const host = document.createElement('div');
+    col.appendChild(host);
+    createBoard(host, { positions: step.before, highlightPlate: step.plate });
+    return col;
+  }
+
+  // ---- Hand-fix fallback: a plain position editor (same gestures as Setup). ----
+  if (state.editing) {
+    const col = document.createElement('div');
+    col.className = 'map-wrap';
+    const card = document.createElement('div');
+    card.className = 'ap-card';
+    card.innerHTML = `<div class="ap-h">Fix the board by hand</div>
+      <div style="font-size:14px;color:#fff;margin-top:6px">Drag each slide to where the lock <i>really</i> is
+        (or press <b>1</b>–<b>7</b>), then Apply.</div>
+      <div style="margin-top:12px">
+        <span class="ap-btn primary" data-action="apply-edit">Apply ›</span>
+        <span class="ap-btn" data-action="cancel-edit">Cancel</span>
+      </div>`;
+    col.appendChild(card);
+    const host = document.createElement('div');
+    col.appendChild(host);
+    createBoard(host, {
+      positions: state.positions,
+      draggable: true,
+      highlightPlate: state.activePlate,
+      onSetPosition: onDragPosition,
+    });
+    return col;
+  }
 
   const active = state.activePlate;
   const mapped = m.status.filter((s) => s === 'done').length;
@@ -1261,6 +1351,12 @@ function mappingView() {
   // what it cost the pick, and offers the optional wiggle capture. Cleared on
   // the next click that isn't part of the jam flow.
   const jamHtml = state.jamNotice ? jamNoticeHtml(state.jamNotice) : '';
+  // One-shot result of a "Lock doesn't match?" rewind: the culprit, synced.
+  const walkbackHtml = state.walkbackNote
+    ? `<div class="note" style="margin-top:6px">Found it — the divergence began with a <b>${plateLabel(state.walkbackNote.plate)}</b>
+        move, so its recording is wrong. Board and lock are back in sync; re-record
+        <b>${plateLabel(state.walkbackNote.plate)}</b> below.</div>`
+    : '';
   // One-shot acknowledgement of a stray (off-plan) jam reported via Oops.
   const oopsHtml = state.oopsNotice
     ? `<div class="note" style="margin-top:6px">${
@@ -1306,7 +1402,7 @@ function mappingView() {
   // Per-user toggle: off hides the app's move guidance (preview, suggested-press text,
   // recommended-plate jump, Done/Skip plan) but keeps the edge/jam warning.
   const suggestToggleHtml = `<label class="ap-kbd" style="margin-top:4px"><input type="checkbox" data-action="toggle-suggest"${suggestEnabled() ? ' checked' : ''}> Suggest moves</label>`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${instructionHtml}${statusHtml}${jamHtml}${oopsHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${instructionHtml}${statusHtml}${walkbackHtml}${jamHtml}${oopsHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}`;
   col.appendChild(head);
 
   // Ledger column headers: words live HERE, so the row buttons can stay compact
@@ -1406,7 +1502,10 @@ function mappingView() {
   const solveBlock = done
     ? `<div style="${isActive ? 'margin-top:12px' : ''}"><span class="ap-btn primary" data-action="goto-solve">Solve ›</span></div>`
     : '';
-  foot.innerHTML = saveBlock + solveBlock;
+  // Always reachable: the rewind for when the board stops matching the lock.
+  const syncBtn = `<div style="margin-top:10px"><span class="ap-btn" data-action="walkback-start"
+      title="The board stopped matching the real lock? Rewind your recent moves one undo at a time to find the step that lied.">Lock doesn't match?</span></div>`;
+  foot.innerHTML = saveBlock + solveBlock + syncBtn;
   col.appendChild(foot);
 
   // Labels go green once a plate is saved, and show the move as "start → landing" for
@@ -1680,24 +1779,7 @@ function solvePanel(side, boardProps) {
 
   if (state.plan === undefined) initSolve();
 
-  // After an Edit positions that contradicted the plan's prediction: name the
-  // rows that could explain the drift, with a one-tap jump to review them.
-  if (state.driftReport) {
-    const rep = state.driftReport;
-    const where = rep.drifted.map(plateLabel).join(', ');
-    const top = rep.suspects.slice(0, 2);
-    const note = document.createElement('div');
-    note.innerHTML = `<div class="note" style="margin:0 0 10px">The lock isn't where the mapping predicted — off on <b>${where}</b>.${
-      top.length
-        ? ` Most likely mis-recorded: ${top.map((sp) => `<b>${plateLabel(sp.plate)}</b>`).join(', then ')}.`
-        : ' None of the executed moves can explain it alone — re-check the rows you trust least, and that no move was missed or doubled.'
-    }<div style="margin-top:6px">${
-      top.length
-        ? top.map((sp) => `<span class="ap-btn" data-action="drift-review" data-plate="${sp.plate}">Review ${plateLabel(sp.plate)} ›</span>`).join(' ')
-        : `<span class="ap-btn" data-action="back-to-map">Back to mapping</span>`
-    }</div></div>`;
-    side.appendChild(note.firstElementChild);
-  }
+  if (state.driftReport) side.appendChild(driftNoteEl());
 
   if (state.plan === null) {
     const card = document.createElement('div');
@@ -1820,11 +1902,24 @@ function resetPinsToInitial() {
   state.positions = state.initial.slice();
   state.pickMistakes = 0; // slides only snap back when a pick breaks — assume a fresh pick
   state.driftReport = undefined; // a reset starts from a known state
+  state.stepLog = []; // ...so there is nothing left to rewind through
+  state.walkback = undefined;
   if (state.stage === 'solve') state.plan = undefined; // re-plan from the reset point
   if (state.stage === 'discovery') {
     state.skipPlanKey = undefined;
     if (state.activePlate != null) seedRecording(state.activePlate);
   }
+}
+
+// Every board-moving step during mapping is logged with the positions it
+// started from, so "Lock doesn't match?" can walk the player BACKWARDS through
+// their own moves: each step is physically undoable in the lock (slide it the
+// other way — the inverse of a move that worked is always legal), and the first
+// rewind where lock and board agree again pinpoints the mis-recorded slide.
+function logStep(plate, dir) {
+  const log = (state.stepLog ??= []);
+  log.push({ plate, dir, before: state.positions.slice() });
+  if (log.length > 60) log.shift(); // plenty to rewind through; don't grow forever
 }
 
 // A reported jam of a KNOWN press (plate + direction): remember it against the
@@ -1874,6 +1969,7 @@ appEl.addEventListener('click', (e) => {
   // tapped) and clears on any other action; the oops note is one-shot too.
   if (a !== 'probe-jammed' && a !== 'jam-wiggle') state.jamNotice = undefined;
   if (a !== 'oops') state.oopsNotice = undefined;
+  if (a !== 'walkback-match') state.walkbackNote = undefined;
 
   switch (a) {
     case 'n-dec': resizeN(clampN(state.n - 1)); break;
@@ -1881,6 +1977,7 @@ appEl.addEventListener('click', (e) => {
     case 'start-mapping':
       if (!state.mapping || state.mapping.n !== state.n) state.mapping = createMapping(state.n);
       state.initial = state.positions.slice(); // the setup positions are the lock's reset point
+      state.stepLog = []; // a fresh sync point — nothing to rewind past it
       state.activePlate = undefined;
       state.rec = null;
       state.stage = 'discovery';
@@ -1987,6 +2084,51 @@ appEl.addEventListener('click', (e) => {
       // edits and return to the passive review (saved links, committed board).
       if (state.activePlate != null) seedRecording(state.activePlate);
       break;
+    case 'walkback-start':
+      // Rewind through the logged moves; with nothing logged, go straight to
+      // the hand-fix editor.
+      if ((state.stepLog || []).length) state.walkback = { undone: 0 };
+      else { state.editBackup = state.positions.slice(); state.editing = true; state.activePlate = 0; }
+      break;
+    case 'walkback-more':
+      if (state.walkback) state.walkback.undone++;
+      break;
+    case 'walkback-match': {
+      // Lock and board agree at this rewound state, and they disagreed one step
+      // later — so the step just undone is where the recording lied. Sync the
+      // board here (true by construction), re-open that slide's row, and land
+      // in its review.
+      const log = state.stepLog || [];
+      const idx = log.length - 1 - (state.walkback ? state.walkback.undone : 0);
+      if (idx < 0) break;
+      const step = log[idx];
+      state.positions = step.before.slice();
+      state.stepLog = log.slice(0, idx);
+      state.walkback = undefined;
+      state.skipPlanKey = undefined;
+      state.walkbackNote = { plate: step.plate };
+      if (state.mapping.status[step.plate] === 'done') {
+        state.mapping.status[step.plate] = 'partial';
+        state.lockLoaded = false;
+      }
+      seedRecording(step.plate);
+      break;
+    }
+    case 'walkback-hand': {
+      // Bail out of the rewind: edit positions by hand, starting from whatever
+      // the rewind currently shows (the player has undone that many moves).
+      const log = state.stepLog || [];
+      const u = state.walkback ? state.walkback.undone : 0;
+      const shown = state.walkback
+        ? (u >= log.length ? (log[0]?.before ?? state.positions) : log[log.length - 1 - u].before)
+        : state.positions;
+      state.editBackup = state.positions.slice();
+      state.positions = shown.slice();
+      state.editing = true;
+      state.walkback = undefined;
+      state.activePlate = 0;
+      break;
+    }
     case 'drift-review':
       // Jump from the drift diagnosis straight into reviewing the suspect row.
       state.driftReport = undefined;
@@ -2047,6 +2189,7 @@ appEl.addEventListener('click', (e) => {
       const plate = +t.dataset.plate;
       const dir = t.dataset.dir;
       if (state.mapping.status[plate] === 'done' && isLegal(state.positions, state.mapping.coupling, plate, dir)) {
+        logStep(plate, dir);
         state.positions = applyMove(state.positions, state.mapping.coupling, plate, dir);
         state.skipPlanKey = undefined; // positions changed → re-offer any edge plan
         // re-base the in-progress recording against the new positions
@@ -2088,9 +2231,18 @@ appEl.addEventListener('click', (e) => {
       // on a pick break, so overwriting it would desync every later Reset. To
       // change the reset point itself, adjust the pins in Setup and re-enter
       // mapping (start-mapping re-snapshots it).
-      //
-      // If the entered positions differ from what the executed plan predicted,
-      // the mapping lied somewhere — diagnose which rows could explain it.
+      if (state.stage === 'discovery') {
+        // Hand-fix during mapping: the board now matches the lock by assertion;
+        // the old step log no longer describes how we got here.
+        state.editing = false;
+        state.editBackup = undefined;
+        state.stepLog = [];
+        state.skipPlanKey = undefined;
+        suggestDefault();
+        break;
+      }
+      // In Solve: if the entered positions differ from what the executed plan
+      // predicted, the mapping lied somewhere — diagnose which rows could explain it.
       state.driftReport =
         state.editBackup && Array.isArray(state.plan) && state.planIndex > 0
           ? diagnoseDrift(state.positions, state.editBackup, state.plan.slice(0, state.planIndex), state.mapping.coupling)
@@ -2099,7 +2251,10 @@ appEl.addEventListener('click', (e) => {
       state.editBackup = undefined;
       state.plan = undefined;
       break;
-    case 'cancel-edit': discardPendingEdit(); break;
+    case 'cancel-edit':
+      discardPendingEdit();
+      if (state.stage === 'discovery') suggestDefault(); // re-seed against the restored positions
+      break;
     case 'back-to-map': state.stage = 'discovery'; state.driftReport = undefined; break;
     case 'load-lock': {
       const lock = getLock(store, t.dataset.id);
@@ -2128,6 +2283,7 @@ appEl.addEventListener('click', (e) => {
         state.rec = null;
         state.blockedProbes = []; // jam memory and pick damage belong to the previous lock
         state.knownLinks = [];
+        state.stepLog = [];
         state.pickMistakes = 0;
         state.picksBroken = 0;
         if (state.stage === 'discovery') suggestDefault();

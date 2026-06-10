@@ -583,7 +583,60 @@ try {
     await d.shot('solve-jam-recovered');
   });
 
-  // 11 · Save / Start over / load roundtrip.
+  // 11 · "Lock doesn't match?": repositioning through a lying mapped row drifts
+  // the board over several steps; the rewind walks backwards (one physical undo
+  // per step) until lock and board agree — the first agreeing state names the
+  // step that lied, re-syncs by construction, and re-opens that row.
+  await scenario(browser, 'walkback', { width: 1280, height: 900 }, async (d, page) => {
+    // Real lock: sliding P1 drags P3 with it. Recorded: P1 moves only itself.
+    const real = { id: 'walkback', n: 3, coupling: [[1, 0, 1], [0, 1, 0], [0, 0, 1]], initial: [3, 4, 3] };
+    d.lock = real;
+    d.game = new (d.game.constructor)(real);
+    const session = {
+      stage: 'discovery', n: real.n, positions: real.initial.slice(), initial: real.initial.slice(),
+      mapping: { n: real.n, coupling: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], status: ['done', 'unstarted', 'done'] },
+      location: '', kind: 'Chest', description: '', contents: [], lockLoaded: false,
+    };
+    await page.addInitScript((s) => localStorage.setItem('g1r.session', JSON.stringify(s)), session);
+    await page.goto(BASE_URL);
+    await page.waitForSelector('.map-wrap');
+
+    // Reposition with mapped arrows, mirroring the real lock. The middle move
+    // uses the lying row — the board silently drifts from there on.
+    for (const [p, dir] of [[2, 'L'], [0, 'L'], [2, 'L']]) {
+      const r = d.game.press(p, dir);
+      if (r.blocked) { d.issue('deadend', 'walkback fixture jammed unexpectedly'); return; }
+      await d.click('apply-move', `[data-plate="${p}"][data-dir="${dir}"]`);
+    }
+
+    await d.click('walkback-start');
+    let found = false;
+    for (let i = 0; i < 5; i++) {
+      const txt = (await d.text('.map-wrap .ap-card')) || '';
+      const m = txt.match(/slide\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
+      if (!m) { d.issue('ui', `no undo instruction while rewinding: "${txt.slice(0, 80)}"`); return; }
+      d.game.press(+m[1] - 1, m[2] === 'Left' ? 'L' : 'R'); // physical undo — always legal
+      const board = await d.boardPositions();
+      if (board && board.join(',') === d.game.positions.join(',')) {
+        await d.click('walkback-match');
+        found = true;
+        break;
+      }
+      await d.click('walkback-more');
+    }
+    if (!found) { d.issue('ui', 'rewind never reached an agreeing state'); return; }
+
+    await d.expectBoardMatchesGame('after walkback resolution');
+    const note = (await d.text('.map-wrap')) || '';
+    if (!note.includes('began with a P1')) d.issue('ui', 'walkback did not name P1 as the culprit');
+    await d.shot('walkback-found');
+
+    // Finish: re-record the re-opened P1 (and P2) truthfully, then open the lock.
+    if (!(await d.mapLock({ enter: false }))) return;
+    if (!(await d.solveLock({}))) d.issue('ui', 'could not open the lock after the walkback fix');
+  });
+
+  // 12 · Save / Start over / load roundtrip.
   await scenario(browser, 'save-load', { width: 1280, height: 800 }, async (d, page) => {
     d.lock = LOCKS[0];
     d.game = new (d.game.constructor)(d.lock);
