@@ -4,7 +4,7 @@ import { applyMove, moveDelta, isSolved, isLegal, GOAL, MIN, MAX } from '../mode
 import { solve, diagnoseDrift } from '../solver.js';
 import {
   createRecording, tagOf, positionsOf, couplingRow,
-  toggleTag, dragActive, dragOther, validRecording, setActiveDir,
+  toggleTag, dragActive, dragOther, validRecording, setActiveDir, restorableDraft,
 } from './mapping-record.js';
 import { coachingMessage } from './coaching.js';
 import { findCycles, expandedLayout, nextSectionStart, prevSectionStart } from '../cycles.js';
@@ -284,10 +284,30 @@ function blockerCell(jn, j) {
 // the away-from-center press, and the hint/preview must show THAT, not re-show
 // the press that just jammed.
 function seedRecording(plate) {
+  state.recDrafts ??= {};
+  // Switching away is non-destructive: stash the current recording if the player has
+  // touched it, so a stray tap (or any plate-hop) can be recovered by switching back.
+  if (state.recTouched && Number.isInteger(state.activePlate)) {
+    state.recDrafts[state.activePlate] = state.rec;
+  }
   state.activePlate = plate;
-  state.rec = plate == null ? null : createRecording(state.positions, plate, relFromMapping(plate));
+  if (plate == null) {
+    state.rec = null;
+    state.recTouched = false;
+    return;
+  }
+  // Restore a previously stashed draft for this plate, but only if it's still valid for the
+  // current board (restorableDraft enforces the baseline === positions guard).
+  const draft = restorableDraft(state.recDrafts, plate, state.positions);
+  if (draft) {
+    state.rec = draft;
+    state.recTouched = true; // a restored draft is, by definition, work in progress
+    return;
+  }
+  // Fresh recording (unchanged from the original behaviour).
+  state.rec = createRecording(state.positions, plate, relFromMapping(plate));
   state.recTouched = false;
-  if (state.rec && suggestEnabled()) {
+  if (suggestEnabled()) {
     const rec = recommendNext(state.positions, state.mapping, blockedNow(), softLinksSet());
     if (rec && rec.type === 'probe' && rec.plate === plate) {
       state.rec = setActiveDir(state.rec, rec.dir === 'L' ? 1 : -1);
