@@ -937,6 +937,34 @@ function lockRowHtml(l) {
 
 const isoNow = () => new Date().toISOString();
 
+// The current lock as a shareable code (saved or not — unnamed locks share
+// fine, they just arrive as "Unnamed lock"). Same envelope as Export/Share.
+function buildShareCode() {
+  return encodeShare(
+    {
+      id: state.lockId || `lock-${Date.now()}`,
+      name: composeName(),
+      location: (state.location || '').trim(),
+      kind: state.kind,
+      description: (state.description || '').trim(),
+      n: state.n,
+      initial: (state.initial || state.positions).slice(),
+      coupling: state.mapping ? state.mapping.coupling : null,
+      status: state.mapping ? state.mapping.status : null,
+      contents: sanitizeContents(state.contents),
+      notes: '',
+    },
+    isoNow()
+  );
+}
+
+// The success screen's share code must track name/contents typing, which
+// deliberately doesn't re-render (it would steal focus).
+function refreshLiveShare() {
+  const ta = appEl.querySelector('.share-code[data-live-share]');
+  if (ta) ta.value = buildShareCode();
+}
+
 // Short status word for a lock record, for the conflict review's side-by-side view.
 function lockStatusWord(l) {
   if (!l.coupling) return 'not mapped';
@@ -1652,7 +1680,13 @@ function solvePanel(side, boardProps) {
       <div class="ap-h" style="margin-top:14px">Save this lock <span class="muted" style="text-transform:none;letter-spacing:0">— name it and it's kept automatically</span></div>
       ${namingWidgetHtml()}
       <div class="ap-h" style="margin-top:16px">Contents <span class="muted" style="text-transform:none;letter-spacing:0">— note what's inside (optional)</span></div>
-      ${contentsEditorHtml(state.contents)}`;
+      ${contentsEditorHtml(state.contents)}
+      <div class="ap-h" style="margin-top:16px">Share this lock <span class="muted" style="text-transform:none;letter-spacing:0">— paste into Import on another device</span></div>
+      <div class="share-panel">
+        <textarea class="share-code" data-live-share readonly rows="2">${escapeHtml(buildShareCode())}</textarea>
+        <div style="margin-top:6px"><span class="ap-btn" data-action="copy-share">Copy</span>
+          <span class="share-copied muted"></span></div>
+      </div>`;
     side.appendChild(card);
     if (state.plan.length) side.appendChild(planCardEl());
     return boardProps;
@@ -2071,6 +2105,7 @@ appEl.addEventListener('input', (e) => {
     if (ctItem) row.item = e.target.value;
     else { const v = e.target.value; row.qty = v === '' ? '' : Number(v); }
     persistContents();
+    refreshLiveShare();
     return;
   }
   // update text fields + autosave without re-rendering (keeps the input focused)
@@ -2078,6 +2113,7 @@ appEl.addEventListener('input', (e) => {
   else if (e.target.closest('[data-action="desc-input"]')) activeName().description = e.target.value;
   else return;
   persistName(); // syncLock (create) or saveLock (editor); refreshes the active nameConflict
+  refreshLiveShare();
   const w = document.getElementById('name-warning');
   if (w) w.innerHTML = nameWarningHtml();
 });

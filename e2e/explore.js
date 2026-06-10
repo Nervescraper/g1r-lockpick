@@ -412,6 +412,27 @@ try {
     if (!(await d.mapLock())) return;
     if (!(await d.solveLock({}))) return;
 
+    // The success screen carries the share code; it must decode back to this
+    // very lock (the harness mapped it truthfully, so coupling == ground truth).
+    const code = await page.$eval('.share-code[data-live-share]', (el) => el.value).catch(() => null);
+    if (!code) {
+      d.issue('ui', 'no share code on the Lock open! screen');
+    } else {
+      try {
+        const env = JSON.parse(Buffer.from(code, 'base64').toString('utf8'));
+        const shared = env.locks?.[0];
+        if (env.format !== 'g1r-locks' || !shared) d.issue('ui', 'success-screen share code has the wrong envelope');
+        else if (JSON.stringify(shared.coupling) !== JSON.stringify(d.lock.coupling)) {
+          d.issue('ui', 'success-screen share code does not carry the mapped coupling');
+        }
+      } catch {
+        d.issue('ui', 'success-screen share code is not decodable');
+      }
+    }
+    if (!(await page.$('.share-panel [data-action="copy-share"]'))) {
+      d.issue('ui', 'no Copy button next to the success-screen share code');
+    }
+
     await d.click('start-over');
     await page.waitForSelector('.lock-col');
     const list = (await d.text('.lock-col')) || '';
