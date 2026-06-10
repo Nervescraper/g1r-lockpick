@@ -2181,6 +2181,7 @@ appEl.addEventListener('click', (e) => {
       // Jump from the drift diagnosis straight into reviewing the suspect row.
       state.driftReport = undefined;
       state.stage = 'discovery';
+      state.recDrafts = {}; // fresh mapping entry — don't restore a prior session's drafts
       state.skipPlanKey = undefined;
       seedRecording(+t.dataset.plate);
       break;
