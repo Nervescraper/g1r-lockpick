@@ -2007,6 +2007,7 @@ appEl.addEventListener('click', (e) => {
       state.stepLog = []; // a fresh sync point — nothing to rewind past it
       state.activePlate = undefined;
       state.rec = null;
+      state.recDrafts = {};
       state.stage = 'discovery';
       suggestDefault();
       break;
@@ -2023,7 +2024,7 @@ appEl.addEventListener('click', (e) => {
       discardPendingEdit();
       if (target === 'lock') state.stage = 'lock';
       else if (target === 'setup') { state.stage = 'setup'; state.activePlate = 0; }
-      else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; state.rec = null; state.driftReport = undefined; suggestDefault(); }
+      else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; state.rec = null; state.recDrafts = {}; state.driftReport = undefined; suggestDefault(); }
       else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.plan = undefined; }
       break;
     }
