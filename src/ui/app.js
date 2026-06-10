@@ -40,7 +40,7 @@ const CHANGELOG = [
       'Sharper guidance and fixes: known moves that free an edge are suggested when nothing is safe, “Edit positions” no longer moves the reset point, and R matches the Reset button exactly.',
       'Sharing is quicker: the Lock open! screen shows the lock’s share code with a Copy button, and pasting a code on the Lock page imports it on the spot.',
       'Mis-slid in the game? “Oops…” counts the stray jam (while mapping or solving) so pick durability stays in sync — the second mistake breaks the pick and the board resets itself to match.',
-      'Solution failed in the game? Enter the lock’s real positions via “Edit positions” — the app works out which recorded rows could explain the drift and offers a one-tap review of the suspects.',
+      'Solution failed in the game? If the planned move jammed, “It jammed” now works mid-solve — that slide’s row is provably wrong, so it’s marked for re-recording with the full wiggle capture. If the pins drifted instead, enter the real positions via “Edit positions” and the app names the rows that could explain it, with one-tap review.',
     ],
   },
   {
@@ -1769,7 +1769,8 @@ function solvePanel(side, boardProps) {
     ${oopsNote}
     <div style="margin-top:12px">
       ${doneBtns}
-      <span class="ap-btn" data-action="oops" title="A stray move jammed the lock — counts a mistake on the pick; the second breaks it and the slides snap back.">Oops…</span>
+      <span class="ap-btn" data-action="solve-jammed" title="THIS move jammed — then ${plateLabel(next.plate)}'s recorded row must be wrong. Marks it for re-recording and captures what wiggled.">It jammed ⚠</span>
+      <span class="ap-btn" data-action="oops" title="A different, stray move jammed the lock — counts a mistake on the pick; the second breaks it and the slides snap back.">Oops…</span>
       <span class="ap-btn" data-action="reset-pins">Reset pins${isNarrowViewport() ? '' : ' (R)'}</span>
       <span class="ap-btn" data-action="edit-positions">Edit positions</span>
     </div>`;
@@ -1824,6 +1825,24 @@ function resetPinsToInitial() {
     state.skipPlanKey = undefined;
     if (state.activePlate != null) seedRecording(state.activePlate);
   }
+}
+
+// A reported jam of a KNOWN press (plate + direction): remember it against the
+// current positions, auto-learn the blocker when only one other slide sits on
+// an edge, count the pick damage (the break auto-resets the board), and raise
+// the jam notice with its wiggle capture. Shared by the mapping probe flow and
+// a planned solve move that jams.
+function reportJam(plate, dir) {
+  (state.blockedProbes ??= []).push(`${state.positions.join(',')}|${plate}|${dir}`);
+  const jn = { plate, dir, positions: state.positions.slice() };
+  const edgeOthers = jamEdgeOthers(jn);
+  if (edgeOthers.length === 1) {
+    const j = edgeOthers[0];
+    state.mapping.coupling[plate][j] = blockerCell(jn, j);
+    jn.autoLearned = j;
+  }
+  jn.broke = recordPickMistake();
+  state.jamNotice = jn;
 }
 
 // One point of pick damage (a jam — reported or stray). The second mistake
@@ -1924,25 +1943,28 @@ appEl.addEventListener('click', (e) => {
       // every slide back to the start — auto-reset the board to match.
       const rec = state.rec;
       if (rec) {
-        const dir = rec.deltaI === 1 ? 'L' : 'R';
-        (state.blockedProbes ??= []).push(`${state.positions.join(',')}|${rec.active}|${dir}`);
         defer(state.mapping, rec.active);
-        // Snapshot the jam-time positions BEFORE any break-reset: the wiggle
-        // chips must reflect where the slides were when it jammed.
-        const jn = { plate: rec.active, dir, positions: state.positions.slice() };
-        // The blocker always sits on an edge. With exactly one other slide on
-        // an edge, it MUST be the blocker — record that link automatically,
-        // sign and all (it was being pushed past its edge).
-        const edgeOthers = jamEdgeOthers(jn);
-        if (edgeOthers.length === 1) {
-          const j = edgeOthers[0];
-          state.mapping.coupling[rec.active][j] = blockerCell(jn, j);
-          jn.autoLearned = j;
-        }
-        jn.broke = recordPickMistake();
-        state.jamNotice = jn;
+        reportJam(rec.active, rec.deltaI === 1 ? 'L' : 'R');
         suggestDefault();
       }
+      break;
+    }
+
+    case 'solve-jammed': {
+      // The PLANNED move jammed: the mapping called it safe, reality disagrees —
+      // that plate's recorded row is provably wrong somewhere (a jam moves
+      // nothing, so there are no positions to edit; the jam itself is the
+      // evidence). Mark the row for re-recording and drop into the mapping jam
+      // flow, wiggle capture and all, anchored on it.
+      if (!Array.isArray(state.plan) || state.planIndex >= state.plan.length) break;
+      const mv = state.plan[state.planIndex];
+      state.mapping.status[mv.plate] = 'partial'; // proven wrong — needs re-recording
+      state.lockLoaded = false;
+      reportJam(mv.plate, mv.dir);
+      state.plan = undefined;
+      state.driftReport = undefined;
+      state.stage = 'discovery';
+      suggestDefault();
       break;
     }
 

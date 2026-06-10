@@ -35,9 +35,11 @@ The app moves through four steps, shown as a clickable rail across the top:
 
 If the solver reports **no solution**, the mapping is almost certainly incomplete or has a
 wrong cell — head back to **Map the lock** and double-check. If a solution **fails in the
-game** (the lock stops matching the board), use **Edit positions** to enter where the pins
+game**, there are two cases: a planned move **jams** (nothing moves — hit **It jammed** and
+that slide's row is marked as provably mis-recorded, with the wiggle capture to pin the bad
+link), or the pins **drift** from the board (use **Edit positions** to enter where they
 really are: the app compares the drift against the moves you made and names the rows most
-likely mis-recorded, with a one-tap jump to review them.
+likely mis-recorded, with a one-tap jump to review them).
 
 ## Keyboard shortcuts
 

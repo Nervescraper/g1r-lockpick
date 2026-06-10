@@ -519,7 +519,71 @@ try {
     if (!instr.includes('Reviewing P1')) d.issue('ui', `Review P1 did not land on P1's review: "${instr.slice(0, 80)}"`);
   });
 
-  // 10 · Save / Start over / load roundtrip.
+  // 10 · A planned solve move that JAMS (nothing moves, so there's nothing to
+  // edit): "It jammed" on the solve card must mark that row as provably wrong
+  // and drop into the mapping jam flow; Reset re-syncs, re-recording fixes the
+  // row, and the lock then opens for real.
+  await scenario(browser, 'solve-jam', { width: 1280, height: 900 }, async (d, page) => {
+    // Real lock: sliding P1 drags P3 with it. Recorded mapping: P1 moves only
+    // itself. The plan opens P1R ×3; the real lock jams on the third press
+    // (P3 has been dragged to pin 1 by then — unbeknownst to the board).
+    const real = { id: 'solvejam', n: 3, coupling: [[1, 0, 1], [0, 1, 0], [0, 0, 1]], initial: [7, 4, 3] };
+    const recorded = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    d.lock = real;
+    d.game = new (d.game.constructor)(real);
+    const session = {
+      stage: 'solve', n: real.n, positions: real.initial.slice(), initial: real.initial.slice(),
+      mapping: { n: real.n, coupling: recorded, status: Array(real.n).fill('done') },
+      location: '', kind: 'Chest', description: '', contents: [], lockLoaded: true,
+    };
+    await page.addInitScript((s) => localStorage.setItem('g1r.session', JSON.stringify(s)), session);
+    await page.goto(BASE_URL);
+    await page.waitForSelector('.ap-nm');
+
+    // Follow the plan; the board may silently drift (the hidden link) — the
+    // observable failure is the jam.
+    let jammed = false;
+    for (let i = 0; i < 10 && !(await page.$('.success')); i++) {
+      const nm = await d.text('.ap-nm');
+      const m = nm && nm.match(/P(\d+)\s*[◀▶]\s*(Left|Right)/);
+      if (!m) break;
+      const r = d.game.press(+m[1] - 1, m[2] === 'Left' ? 'L' : 'R');
+      if (r.blocked) {
+        await d.click('solve-jammed');
+        jammed = true;
+        break;
+      }
+      await d.click('did-it');
+    }
+    if (!jammed) { d.issue('deadend', 'solve-jam fixture never jammed'); return; }
+
+    // Landed in the mapping jam flow with the row marked for re-recording.
+    await page.waitForSelector('.map-wrap');
+    const head = (await d.text('.map-wrap .ap-card')) || '';
+    if (!head.includes('2 of 3 mapped')) d.issue('ui', `jammed row not marked for re-recording: "${head.slice(0, 60)}"`);
+    const lh = (await d.text('.ledger-head')) || '';
+    if (!lh.includes('wiggled?')) d.issue('ui', 'solve jam did not open the wiggle capture');
+    // The player saw P3 twitch: record the link (sign unknown — positions drifted).
+    await d.click('jam-wiggle', '[data-plate="2"]');
+    if (!(await page.$('[data-action="jam-wiggle"][data-plate="2"].on-wig'))) {
+      d.issue('ui', 'wiggle tap did not register from the solve-jam flow');
+    }
+    await d.shot('solve-jam-capture');
+    await d.click('jam-done');
+
+    // Recover: snap lock and board to the start, re-record the bad row, solve.
+    await d.click('reset-pins');
+    d.game.reset();
+    await d.expectBoardMatchesGame('after reset following a solve jam');
+    if (!(await d.mapLock({ enter: false }))) return;
+    if (!(await d.solveLock({}))) {
+      d.issue('ui', 'could not open the lock after re-recording the jammed row');
+      return;
+    }
+    await d.shot('solve-jam-recovered');
+  });
+
+  // 11 · Save / Start over / load roundtrip.
   await scenario(browser, 'save-load', { width: 1280, height: 800 }, async (d, page) => {
     d.lock = LOCKS[0];
     d.game = new (d.game.constructor)(d.lock);
