@@ -636,7 +636,50 @@ try {
     if (!(await d.solveLock({}))) d.issue('ui', 'could not open the lock after the walkback fix');
   });
 
-  // 12 · Save / Start over / load roundtrip.
+  // 12 · A lit "make it safer" move that jams must charge the jam to the LIT
+  // move's row (proving it wrong), not to the queued next recording.
+  await scenario(browser, 'plan-jam', { width: 1280, height: 900 }, async (d, page) => {
+    // Recorded: P1 (done) claims "P1 ◀ drags P2 with it" — legal from here.
+    // Real: P1 ◀ also drags P3 up, and P3 sits on pin 7 → the lit move jams.
+    const real = { id: 'planjam', n: 3, coupling: [[1, 1, 1], [0, 1, 0], [0, 0, 1]], initial: [4, 1, 7] };
+    d.lock = real;
+    d.game = new (d.game.constructor)(real);
+    const session = {
+      stage: 'discovery', n: real.n, positions: real.initial.slice(), initial: real.initial.slice(),
+      mapping: { n: real.n, coupling: [[1, 1, 0], [0, 1, 0], [0, 0, 1]], status: ['done', 'unstarted', 'done'] },
+      location: '', kind: 'Chest', description: '', contents: [], lockLoaded: false,
+    };
+    await page.addInitScript((s) => localStorage.setItem('g1r.session', JSON.stringify(s)), session);
+    await page.goto(BASE_URL);
+    await page.waitForSelector('.map-wrap');
+
+    // A plan must be lit, opening with P1 ◀ (clears P2's edge per the recording).
+    const lit = await page.$('[data-action="apply-move"].plan-next');
+    if (!lit) { d.issue('deadend', 'plan-jam fixture produced no lit plan'); return; }
+    const litPlate = +(await lit.getAttribute('data-plate'));
+    const litDir = await lit.getAttribute('data-dir');
+    if (litPlate !== 0 || litDir !== 'L') { d.issue('deadend', `unexpected lit move P${litPlate + 1}${litDir}`); return; }
+
+    // Do it in the lock: it jams. Report via the footer's It jammed.
+    const r = d.game.press(litPlate, litDir);
+    if (!r.blocked) { d.issue('deadend', 'plan-jam fixture did not jam'); return; }
+    await d.click('probe-jammed');
+
+    // The jam must be charged to P1 (the lit move), not P2 (the queued probe):
+    // P1 drops to partial (2→1 mapped) and the jam view anchors on P1.
+    const head = (await d.text('.map-wrap .ap-card')) || '';
+    if (!head.includes('1 of 3 mapped')) d.issue('ui', `lit-move jam did not re-open P1's row: "${head.slice(0, 60)}"`);
+    if (!/P1[^.]*jams here/.test(head)) d.issue('ui', 'jam notice is not anchored on the lit move');
+    const jammedRowIdx = await page.$$eval('.tp-2drow', (rows) =>
+      rows.findIndex((row) => row.textContent.includes('jammed'))
+    );
+    if (jammedRowIdx !== -1 && real.n - 1 - jammedRowIdx !== 0) {
+      d.issue('ui', `wiggle view marks the wrong row as jammed (row index ${jammedRowIdx})`);
+    }
+    await d.shot('plan-jam-anchored');
+  });
+
+  // 13 · Save / Start over / load roundtrip.
   await scenario(browser, 'save-load', { width: 1280, height: 800 }, async (d, page) => {
     d.lock = LOCKS[0];
     d.game = new (d.game.constructor)(d.lock);

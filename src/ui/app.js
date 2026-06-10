@@ -1488,6 +1488,9 @@ function mappingView() {
     : '';
   const saveBlock = jamMode
     ? `<span class="ap-btn primary" data-action="jam-done">Done ›</span> ${resetBtn}`
+    : planPending
+    ? `<span class="ap-btn" data-action="probe-jammed" title="The lit safety move jammed — then ${plateLabel(suggestion.moves[0].plate)}'s recorded row must be wrong. Marks it for re-recording and captures what wiggled.">It jammed ⚠</span>
+       <span class="ap-btn" data-action="oops" title="A different, stray move jammed — counts a mistake on the pick.">Oops…</span> ${resetBtn}`
     : reviewing && !state.recTouched
     ? `<div class="muted">Viewing a mapped slide — nothing is being changed. Drag it or tap a tag to start re-recording.
          <span class="linklike" data-action="delete-plate" style="float:right">forget ${plateLabel(active)}’s mapping…</span></div>`
@@ -2033,11 +2036,25 @@ appEl.addEventListener('click', (e) => {
     case 'save-next': saveActivePlate(); break;
 
     case 'probe-jammed': {
-      // The press the player just tried (the recording's plate + direction) was
-      // blocked: nothing moved. Remember it against the current positions so it
-      // is never suggested here again, and deprioritize the plate. Each jam also
-      // damages the pick: the SECOND mistake breaks it, which in the game snaps
-      // every slide back to the start — auto-reset the board to match.
+      // While a "make it safer" plan is pending, the move the player actually
+      // performed is the plan's LIT move — not the queued recording. And that
+      // lit move comes from a mapped row that claimed it legal, so a jam there
+      // proves the row wrong (same logic as a jammed solve move): re-open it.
+      const sug = suggestEnabled() && state.mapping && !allMapped(state.mapping)
+        ? recommendNext(state.positions, state.mapping, blockedNow(), softLinksSet())
+        : null;
+      if (sug && sug.type === 'plan' && state.skipPlanKey !== state.positions.join(',')) {
+        const mv = sug.moves[0];
+        state.mapping.status[mv.plate] = 'partial'; // proven wrong — needs re-recording
+        state.lockLoaded = false;
+        reportJam(mv.plate, mv.dir);
+        suggestDefault();
+        break;
+      }
+      // Otherwise the jam is the recorded probe's: nothing moved. Remember it
+      // against the current positions so it is never suggested here again, and
+      // deprioritize the plate. Each jam also damages the pick: the SECOND
+      // mistake breaks it, which snaps every slide back — the board follows.
       const rec = state.rec;
       if (rec) {
         defer(state.mapping, rec.active);
