@@ -2103,6 +2103,7 @@ appEl.addEventListener('click', (e) => {
       state.plan = undefined;
       state.driftReport = undefined;
       state.stage = 'discovery';
+      state.recDrafts = {};
       suggestDefault();
       break;
     }
@@ -2124,6 +2125,11 @@ appEl.addEventListener('click', (e) => {
     case 'cancel-rerecord':
       // An accidental drag/re-tag while reviewing a mapped plate: discard the
       // edits and return to the passive review (saved links, committed board).
+      // Clear the dirty flag and any stashed draft first, otherwise the re-seed
+      // would stash these unwanted edits and immediately restore them (same plate,
+      // unchanged board) — making Cancel a no-op.
+      state.recTouched = false;
+      if (state.recDrafts) delete state.recDrafts[state.activePlate];
       if (state.activePlate != null) seedRecording(state.activePlate);
       break;
     case 'walkback-start':
@@ -2297,7 +2303,7 @@ appEl.addEventListener('click', (e) => {
       discardPendingEdit();
       if (state.stage === 'discovery') suggestDefault(); // re-seed against the restored positions
       break;
-    case 'back-to-map': state.stage = 'discovery'; state.driftReport = undefined; break;
+    case 'back-to-map': state.stage = 'discovery'; state.recDrafts = {}; state.driftReport = undefined; break;
     case 'load-lock': {
       const lock = getLock(store, t.dataset.id);
       if (lock) {
@@ -2323,6 +2329,7 @@ appEl.addEventListener('click', (e) => {
         state.plan = undefined;
         state.activePlate = undefined;
         state.rec = null;
+        state.recDrafts = {}; // tentative drafts belong to the previous lock
         state.blockedProbes = []; // jam memory and pick damage belong to the previous lock
         state.knownLinks = [];
         state.stepLog = [];
