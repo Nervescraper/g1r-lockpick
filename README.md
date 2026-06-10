@@ -18,13 +18,20 @@ lockpick — is tedious and error-prone. This tool maps the lock with you, then 
 The app moves through four steps, shown as a clickable rail across the top:
 
 1. **Lock** — start a new lock (name it by location and type) or reload a saved one. Saved
-   locks jump straight to wherever you left off.
+   locks jump straight to wherever you left off. Locks travel as share codes: copy one from
+   the *Lock open!* screen, and paste a code anywhere on this page to import it on the spot.
 2. **Setup** — enter the number of plates and each plate's current pin position. This is
    saved as the lock's *reset point*.
-3. **Map the lock** — probe each plate and record how the other plates move (same direction
-   or opposite). The app guides you to avoid blocked moves, which cost a lockpick.
+3. **Map the lock** — slide each plate and record how the others move, right on the board:
+   each row carries **⇉ with / ⇄ opposite** tags and **◀ ▶** reposition arrows for mapped
+   slides. Jams teach the app — report one with **It jammed** (and tap any slides you saw
+   wiggle; each one pins down a link) and the guidance routes around it, suggesting
+   repositioning moves lit up on the board when nothing is safe. Stray mistakes count via
+   **Oops…**; the second mistake breaks the pick and the board resets itself to the lock's
+   start, the way the game does.
 4. **Solve** — once the lock is mapped, the app computes the shortest safe sequence to bring
-   every pin to the center and steps you through it. Reset the pins anytime to re-plan.
+   every pin to the center and steps you through it, grouping repeated moves into one
+   "Did all N" step. Reset the pins anytime to re-plan.
 
 If the solver reports **no solution**, the mapping is almost certainly incomplete or has a
 wrong cell — head back to **Map the lock** and double-check.

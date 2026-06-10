@@ -15,7 +15,7 @@ the repositioning needed to recover.
 | `harness.js` | `Driver` — the player. Reads only the rendered DOM, acts only via clicks/keys/drags, mirrors every press in the `SimulatedLock`, and records `issues` (defects: state drift, console errors, layout overflow, solver contradictions) and `observations` (friction a real player would feel). |
 | `browser.js` | Launches Playwright's bundled Chromium from the npx cache with an explicit `executablePath` (no system Chrome needed). |
 | `run.js` | Entry point: full map-and-solve of every fixture. `node e2e/run.js [ids…]` |
-| `explore.js` | Entry point: scenario tests — phone viewport, reload-resume, keyboard solving + full-plan modal, wrong-mapping recovery, save/load roundtrip. `node e2e/explore.js` |
+| `explore.js` | Entry point: scenario tests — phone viewport, reload-resume, keyboard solving + full-plan modal, wrong-mapping recovery, the R-reset regression, paste-to-import + run-grouped solving, mapped-slide review (cancel / forget), Oops pick-durability sync, save/load roundtrip. `node e2e/explore.js` |
 | `preflight.js` | No-browser sanity check that fixtures are mappable and solvable when following the app's guidance verbatim. |
 | `strategy-sim.js` | No-browser dry-run of the *player strategy* (deviates from guidance after blocked presses, repositions with mapped moves) — use it to validate new fixtures cheaply before a browser run. |
 | `find-trap.js` | Fixture generator: searches random locks for ones that force mistakes, pick breaks, and repositioning while staying solvable. |
