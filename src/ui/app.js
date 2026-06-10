@@ -1359,10 +1359,13 @@ function mappingView() {
     positions: boardPositions,
     ghosts,
     selectable: true,
-    draggable: active != null,
+    // While acknowledging a jam, the board belongs to that jam: highlight the
+    // slide that jammed (not the next one the recommender already queued up),
+    // and pause dragging until the player taps Done.
+    draggable: !jamMode && active != null,
     onSetPosition: onMapDrag,
     onClick: onMapClick,
-    highlightPlate: active,
+    highlightPlate: jamMode ? jn.plate : active,
     labels,
     rowsRight,
   });

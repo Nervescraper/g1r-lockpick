@@ -422,6 +422,14 @@ export class Driver {
         const jamBtn = await this.page.$('[data-action="probe-jammed"]');
         if (jamBtn) await jamBtn.click();
         else this.issue('ui', 'press jammed but there is no control to tell the app');
+        // The jam acknowledgement must keep the spotlight on the slide that
+        // jammed — not the recommender's next candidate.
+        const selIdx = await this.page.$$eval('.tp-2drow', (rows) =>
+          rows.findIndex((r) => r.querySelector('.tp-tray.sel'))
+        );
+        if (selIdx !== -1 && this.lock.n - 1 - selIdx !== choice.plate) {
+          this.issue('ui', `jam view highlights P${this.lock.n - selIdx} instead of the jammed P${choice.plate + 1}`);
+        }
         // The game wiggles every linked plate; report the ones this player
         // happened to notice via the rows' wiggled? column, then leave jam
         // mode through its Done button.
