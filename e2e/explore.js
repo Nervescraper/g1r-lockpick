@@ -506,6 +506,15 @@ try {
       await d.shot('missing-saved-lock');
       return;
     }
+    const readStamp = () =>
+      page.evaluate(() => {
+        try {
+          return JSON.parse(localStorage.getItem('g1r.locks')).find((l) => l.description === 'roundtrip chest')?.updatedAt ?? null;
+        } catch {
+          return null;
+        }
+      });
+    const stampBefore = await readStamp();
     await d.click('load-lock', `[data-id]`);
     await page.waitForSelector('.ap-side .ap-card, .map-wrap');
     const side = (await d.text('.ap-side')) || '';
@@ -525,6 +534,12 @@ try {
         await d.click('did-it');
       }
       if (!d.game.isSolved()) d.issue('state', `re-solve after load ended at [${d.game.positions}]`);
+    }
+    // Viewing and re-solving change nothing in the record — its timestamp (and
+    // place in Recent) must not move.
+    const stampAfter = await readStamp();
+    if (stampAfter !== stampBefore) {
+      d.issue('state', `viewing/solving the lock bumped updatedAt (${stampBefore} → ${stampAfter})`);
     }
     await d.shot('after-load');
   });

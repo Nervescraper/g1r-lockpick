@@ -175,6 +175,10 @@ const stamp = (lock) => ({ ...lock, updatedAt: Date.now() });
 // when it's missing — so an imported lock lands in Recent by when it was actually saved.
 const preserve = (lock) => ({ ...lock, updatedAt: lock.updatedAt ?? Date.now() });
 
+// Everything about a lock record except its timestamp, for change detection.
+const lockFingerprint = (l) =>
+  JSON.stringify([l.name, l.location, l.kind, l.description, l.n, l.initial, l.coupling, l.status, l.contents, l.notes]);
+
 // Once the lock is identifiable (a location or description), keep its saved record current —
 // unless it would duplicate an existing lock, in which case refuse and flag a conflict.
 function syncLock() {
@@ -183,7 +187,7 @@ function syncLock() {
   if (dup) { state.nameConflict = dup.name; return; }
   state.nameConflict = null;
   if (!state.lockId) state.lockId = `lock-${Date.now()}`;
-  saveLock(store, stamp({
+  const record = {
     id: state.lockId,
     name: composeName(),
     location: (state.location || '').trim(),
@@ -197,7 +201,13 @@ function syncLock() {
     // never carry an in-progress blank row — while state.contents keeps what's on screen.
     contents: sanitizeContents(state.contents),
     notes: '',
-  }));
+  };
+  // This runs on every render, so write (and bump updatedAt) only when the
+  // record genuinely changed — just viewing or solving a lock must not move
+  // it to the top of Recent.
+  const prev = getLock(store, state.lockId);
+  if (prev && lockFingerprint(prev) === lockFingerprint(record)) return;
+  saveLock(store, stamp(record));
 }
 
 // ---------- helpers ----------
