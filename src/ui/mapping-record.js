@@ -93,3 +93,11 @@ export function dragOther(rec, j, pos) {
 export function validRecording(rec) {
   return positionsOf(rec).every((v) => v >= MIN && v <= MAX);
 }
+
+// True when two position arrays are element-wise equal. Used to decide whether a stashed
+// recording draft is still valid for the current board (a committed move changes positions).
+export function samePositions(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}

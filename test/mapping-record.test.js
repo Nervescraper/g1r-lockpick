@@ -12,6 +12,7 @@ import {
   dragActive,
   dragOther,
   validRecording,
+  samePositions,
 } from '../src/ui/mapping-record.js';
 
 test('suggestedDeltaI points toward center: -1 above the goal, +1 at or below', () => {
@@ -130,4 +131,11 @@ test('validRecording rejects a move that would push a plate past an edge', () =>
   assert.equal(validRecording(tagOff), false);
   // an in-bounds recording is valid:
   assert.equal(validRecording(createRecording([4, 4, 4], 0, { 1: 'with', 2: 'opposite' })), true);
+});
+
+test('samePositions: true only when arrays are element-wise equal', () => {
+  assert.equal(samePositions([4, 7, 2], [4, 7, 2]), true);
+  assert.equal(samePositions([4, 7, 2], [4, 7, 3]), false);
+  assert.equal(samePositions([4, 7], [4, 7, 2]), false); // different lengths
+  assert.equal(samePositions([], []), true);
 });
