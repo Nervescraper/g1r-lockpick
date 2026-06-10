@@ -298,8 +298,8 @@ export class Driver {
   }
 
   // The player strategy, through the UI. Returns true when all plates are mapped.
-  async mapLock({ maxRounds = 150 } = {}) {
-    await this.click('start-mapping');
+  async mapLock({ maxRounds = 150, enter = true } = {}) {
+    if (enter) await this.click('start-mapping');
     await this.page.waitForSelector('.map-wrap');
     await this.shot('mapping-start');
     await this.checkOverflow('mapping');
@@ -455,8 +455,8 @@ export class Driver {
     return false;
   }
 
-  async solveLock({ resetFirst = false, maxSteps = 100 } = {}) {
-    await this.click('goto-solve');
+  async solveLock({ resetFirst = false, maxSteps = 100, enter = true } = {}) {
+    if (enter) await this.click('goto-solve');
     await this.page.waitForSelector('.ap-side .ap-card');
     if (resetFirst) {
       const btn = await this.page.$('[data-action="reset-pins"]');

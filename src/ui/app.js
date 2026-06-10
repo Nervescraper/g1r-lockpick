@@ -39,6 +39,7 @@ const CHANGELOG = [
       'Solving long plans is lighter: same-direction runs step as one (“P2 ▶ Right ×6 — Did all 6”), and the Connections panel uses the same ⇉ / ⇄ icons.',
       'Sharper guidance and fixes: known moves that free an edge are suggested when nothing is safe, “Edit positions” no longer moves the reset point, and R matches the Reset button exactly.',
       'Sharing is quicker: the Lock open! screen shows the lock’s share code with a Copy button, and pasting a code on the Lock page imports it on the spot.',
+      'Mis-slid in the game? “Oops…” counts the stray jam (while mapping or solving) so pick durability stays in sync — the second mistake breaks the pick and the board resets itself to match.',
     ],
   },
   {
@@ -1249,6 +1250,14 @@ function mappingView() {
   // what it cost the pick, and offers the optional wiggle capture. Cleared on
   // the next click that isn't part of the jam flow.
   const jamHtml = state.jamNotice ? jamNoticeHtml(state.jamNotice) : '';
+  // One-shot acknowledgement of a stray (off-plan) jam reported via Oops.
+  const oopsHtml = state.oopsNotice
+    ? `<div class="note" style="margin-top:6px">${
+        state.oopsNotice.broke
+          ? 'That stray jam was the pick’s second mistake — it broke and the slides snapped back to the start. Board reset to match.'
+          : 'Counted — a stray jam costs a mistake. One more breaks the pick.'
+      }</div>`
+    : '';
   // Tier 4: the player has reported every viable move as jammed at these positions.
   const stuckHtml =
     !jamMode && suggestEnabled() && suggestion && suggestion.type === 'stuck'
@@ -1286,7 +1295,7 @@ function mappingView() {
   // Per-user toggle: off hides the app's move guidance (preview, suggested-press text,
   // recommended-plate jump, Done/Skip plan) but keeps the edge/jam warning.
   const suggestToggleHtml = `<label class="ap-kbd" style="margin-top:4px"><input type="checkbox" data-action="toggle-suggest"${suggestEnabled() ? ' checked' : ''}> Suggest moves</label>`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${instructionHtml}${statusHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${instructionHtml}${statusHtml}${jamHtml}${oopsHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}`;
   col.appendChild(head);
 
   // Ledger column headers: words live HERE, so the row buttons can stay compact
@@ -1377,10 +1386,11 @@ function mappingView() {
          <span class="linklike" data-action="delete-plate" style="float:right">forget ${plateLabel(active)}’s mapping…</span></div>`
     : isActive
     ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge — a real move can't do that (it would jam). Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
-       <span class="ap-btn" data-action="probe-jammed" title="The move was blocked at an edge — nothing moved. Tells the app so it stops suggesting it here.">It jammed ⚠</span>${
+       <span class="ap-btn" data-action="probe-jammed" title="The move was blocked at an edge — nothing moved. Tells the app so it stops suggesting it here.">It jammed ⚠</span>
+       <span class="ap-btn" data-action="oops" title="A stray move jammed (wrong slide or direction) — not the one being recorded. Counts a mistake on the pick; the second breaks it.">Oops…</span>${
          reviewing ? ` <span class="ap-btn" data-action="cancel-rerecord" title="Discard these edits — keep the plate's saved links and positions.">Cancel</span>` : ''
        } ${resetBtn}
-       <div class="muted" style="margin-top:8px">Move blocked instead? Click <b>It jammed</b> — a jam shows no links, and the app will steer around it.</div>`
+       <div class="muted" style="margin-top:8px">Move blocked instead? Click <b>It jammed</b> — a jam shows no links, and the app will steer around it. A stray jam (mis-slide)? <b>Oops…</b> keeps the pick honest.</div>`
     : '';
   const solveBlock = done
     ? `<div style="${isActive ? 'margin-top:12px' : ''}"><span class="ap-btn primary" data-action="goto-solve">Solve ›</span></div>`
@@ -1706,16 +1716,30 @@ function solvePanel(side, boardProps) {
     ? `<span class="ap-btn primary" data-action="did-run" data-count="${run}">Did all ${run} ›</span>
        <span class="ap-btn" data-action="did-it">Did 1 ›</span>`
     : `<span class="ap-btn primary" data-action="did-it">Did it ›</span>`;
+  // Pick damage stays visible while executing too — a stray jam here costs the
+  // same durability as one during mapping.
+  const pickNote = state.pickMistakes
+    ? ' · <span style="color:var(--danger)">pick: ⚠ 1 mistake</span>'
+    : '';
+  const oopsNote = state.oopsNotice
+    ? `<div class="note" style="margin:8px 0 0">${
+        state.oopsNotice.broke
+          ? 'That stray jam broke the pick — the slides snapped back to the start, and the plan restarts from there.'
+          : 'Counted — a stray jam costs a mistake. One more breaks the pick.'
+      }</div>`
+    : '';
   const nextCard = document.createElement('div');
   nextCard.className = 'ap-card';
   nextCard.innerHTML = `
-    <div class="ap-nm-label">Next move · ${remaining} left</div>
+    <div class="ap-nm-label">Next move · ${remaining} left${pickNote}</div>
     <div class="ap-nm">${plateLabel(next.plate)} <span class="dir">${dirArrow(next.dir)} ${DIR_WORD[next.dir]}</span>${
       run > 1 ? ` <span class="dir">×${run}</span>` : ''
     } <span class="badge safe">✓ safe</span></div>
     <div class="ap-nm-sub">${moveSubText(coupling, state.positions, state.planIndex)}</div>
+    ${oopsNote}
     <div style="margin-top:12px">
       ${doneBtns}
+      <span class="ap-btn" data-action="oops" title="A stray move jammed the lock — counts a mistake on the pick; the second breaks it and the slides snap back.">Oops…</span>
       <span class="ap-btn" data-action="reset-pins">Reset pins${isNarrowViewport() ? '' : ' (R)'}</span>
       <span class="ap-btn" data-action="edit-positions">Edit positions</span>
     </div>`;
@@ -1771,6 +1795,20 @@ function resetPinsToInitial() {
   }
 }
 
+// One point of pick damage (a jam — reported or stray). The second mistake
+// breaks the pick; a break snaps every slide back to the start, so the board
+// auto-resets to match. Returns whether the pick broke.
+function recordPickMistake() {
+  const broke = (state.pickMistakes || 0) + 1 >= 2;
+  if (broke) {
+    state.picksBroken = (state.picksBroken || 0) + 1;
+    resetPinsToInitial(); // also zeroes pickMistakes (fresh pick)
+  } else {
+    state.pickMistakes = 1;
+  }
+  return broke;
+}
+
 const clampN = (n) => Math.max(N_MIN, Math.min(N_MAX, n));
 
 function resizeN(n) {
@@ -1783,8 +1821,9 @@ appEl.addEventListener('click', (e) => {
   if (!t) return;
   const a = t.dataset.action;
   // The jam acknowledgement stays up through the jam flow (so wiggles can be
-  // tapped) and clears on any other action.
+  // tapped) and clears on any other action; the oops note is one-shot too.
   if (a !== 'probe-jammed' && a !== 'jam-wiggle') state.jamNotice = undefined;
+  if (a !== 'oops') state.oopsNotice = undefined;
 
   switch (a) {
     case 'n-dec': resizeN(clampN(state.n - 1)); break;
@@ -1857,27 +1896,31 @@ appEl.addEventListener('click', (e) => {
         const dir = rec.deltaI === 1 ? 'L' : 'R';
         (state.blockedProbes ??= []).push(`${state.positions.join(',')}|${rec.active}|${dir}`);
         defer(state.mapping, rec.active);
-        const broke = (state.pickMistakes || 0) + 1 >= 2;
-        // Snapshot the jam-time positions: the wiggle chips must reflect where
-        // the slides were when it jammed, even after a break auto-resets them.
-        state.jamNotice = { plate: rec.active, dir, broke, positions: state.positions.slice() };
+        // Snapshot the jam-time positions BEFORE any break-reset: the wiggle
+        // chips must reflect where the slides were when it jammed.
+        const jn = { plate: rec.active, dir, positions: state.positions.slice() };
         // The blocker always sits on an edge. With exactly one other slide on
         // an edge, it MUST be the blocker — record that link automatically,
         // sign and all (it was being pushed past its edge).
-        const edgeOthers = jamEdgeOthers(state.jamNotice);
+        const edgeOthers = jamEdgeOthers(jn);
         if (edgeOthers.length === 1) {
           const j = edgeOthers[0];
-          state.mapping.coupling[rec.active][j] = blockerCell(state.jamNotice, j);
-          state.jamNotice.autoLearned = j;
+          state.mapping.coupling[rec.active][j] = blockerCell(jn, j);
+          jn.autoLearned = j;
         }
-        if (broke) {
-          state.picksBroken = (state.picksBroken || 0) + 1;
-          resetPinsToInitial(); // also zeroes pickMistakes (fresh pick)
-        } else {
-          state.pickMistakes = 1;
-        }
+        jn.broke = recordPickMistake();
+        state.jamNotice = jn;
         suggestDefault();
       }
+      break;
+    }
+
+    case 'oops': {
+      // A stray jam in the game (wrong slide or direction) that wasn't the
+      // recorded move: it teaches nothing about the lock, but it cost the pick
+      // a mistake — keep the durability tracking in sync. The second one
+      // breaks the pick and the board auto-resets to the snapped-back slides.
+      state.oopsNotice = { broke: recordPickMistake() };
       break;
     }
 

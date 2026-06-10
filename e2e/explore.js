@@ -419,7 +419,56 @@ try {
     await d.shot('plate-forgotten');
   });
 
-  // 8 · Save / Start over / load roundtrip.
+  // 8 · Oops keeps pick durability in sync: a stray in-game jam costs a
+  // mistake; the second breaks the pick and the board auto-resets — in both
+  // mapping and solve.
+  await scenario(browser, 'oops-pick-sync', { width: 1280, height: 900 }, async (d, page) => {
+    d.lock = LOCKS[0]; // easy
+    d.game = new (d.game.constructor)(d.lock);
+    await d.gotoFreshApp(BASE_URL);
+    await d.setupLock({});
+    await d.click('start-mapping');
+    await page.waitForSelector('.map-wrap');
+
+    // Move off the reset point so an auto-reset is observable.
+    const hint = (await d.text('.map-instruction')) || '';
+    const m = hint.match(/Slide\s*P(\d+)\s*[◀▶]\s*(Left|Right)/);
+    if (!m) { d.issue('deadend', 'no suggestion in oops scenario'); return; }
+    const r = d.game.press(+m[1] - 1, m[2] === 'Left' ? 'L' : 'R');
+    if (r.blocked) { d.issue('deadend', 'unexpected block in oops scenario'); return; }
+    await d.prepareProbe(+m[1] - 1, m[2] === 'Left' ? 'L' : 'R', d.lock.initial);
+    if (!(await d.tagAndSave(+m[1] - 1, m[2] === 'Left' ? 'L' : 'R', r.deltas))) return;
+
+    // First stray jam: counted, nothing moves.
+    await d.click('oops');
+    const after1 = (await d.text('.map-wrap')) || '';
+    if (!after1.includes('pick: ⚠ 1 mistake')) d.issue('ui', 'first Oops did not surface the pick damage');
+    await d.expectBoardMatchesGame('after first Oops (nothing moved)');
+
+    // Second stray jam: pick breaks, slides snap back, board must follow.
+    await d.click('oops');
+    d.game.reset(); // the physical lock snapped back
+    await d.expectBoardMatchesGame('after second Oops (auto-reset)');
+    const after2 = (await d.text('.map-wrap')) || '';
+    if (!after2.includes('picks broken: 1')) d.issue('ui', 'pick break via Oops not counted');
+    await d.shot('oops-break-reset');
+
+    // Same in Solve: finish mapping, then two strays restart the plan from the top.
+    if (!(await d.mapLock({ enter: false }))) return;
+    await d.click('goto-solve');
+    await page.waitForSelector('.ap-nm');
+    await d.click('oops');
+    const solveTxt = (await d.text('.ap-nm-label')) || '';
+    if (!solveTxt.includes('pick: ⚠ 1 mistake')) d.issue('ui', 'solve card does not show pick damage after Oops');
+    await d.click('oops');
+    d.game.reset();
+    await d.expectBoardMatchesGame('after Oops break during solve');
+    if (!(await page.$('.ap-nm'))) d.issue('ui', 'no plan after an Oops break in solve (should replan from the start)');
+    // Finish the lock from the reset point so the scenario proves play continues.
+    if (!(await d.solveLock({ enter: false }))) d.issue('ui', 'could not finish the solve after an Oops break');
+  });
+
+  // 9 · Save / Start over / load roundtrip.
   await scenario(browser, 'save-load', { width: 1280, height: 800 }, async (d, page) => {
     d.lock = LOCKS[0];
     d.game = new (d.game.constructor)(d.lock);
