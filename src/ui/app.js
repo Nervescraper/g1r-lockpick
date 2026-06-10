@@ -1169,6 +1169,13 @@ function mappingView() {
   // Reviewing: the selected plate is already mapped — the player is most
   // likely just checking its links, not re-recording (yet).
   const reviewing = isActive && m.status[active] === 'done';
+  // Plan mode: the recommender wants known moves done first (to free edges or
+  // change the layout). Like jam mode it owns the instruction line — one ask at
+  // a time. A Skip is remembered against the current positions, so it stays
+  // dismissed until the board changes.
+  const planPending =
+    !jamMode && suggestEnabled() && suggestion && suggestion.type === 'plan' &&
+    state.skipPlanKey !== state.positions.join(',');
 
   // Board data derived from the in-progress recording: the solid slide sits at the
   // tentative landing (positionsOf), a faint ghost marks each moved plate's start, and
@@ -1179,8 +1186,9 @@ function mappingView() {
   // Reviewing a mapped plate also starts with NO preview: its pre-filled tags
   // would otherwise simulate a move from the current positions, which can be
   // out of bounds here (slides drawn past the edges). The preview begins only
-  // once the player actually edits (drags or re-tags).
-  const previewing = !jamMode && !!state.rec &&
+  // once the player actually edits (drags or re-tags). While a plan is pending
+  // there's no preview either — repositioning comes before the next recording.
+  const previewing = !jamMode && !planPending && !!state.rec &&
     (reviewing ? state.recTouched : suggestEnabled() || state.recTouched);
   const boardPositions = previewing ? positionsOf(state.rec) : state.positions;
   const ghosts = previewing
@@ -1217,27 +1225,19 @@ function mappingView() {
     !jamMode && suggestEnabled() && suggestion && suggestion.type === 'stuck'
       ? `<div class="note" style="margin-top:6px">${suggestion.reason}</div>`
       : '';
-  // The edge-clearing plan (tier 2 of recommendNext), rendered as a Done/Skip panel.
-  // A Skip is remembered against the current positions so it stays dismissed until the
-  // board changes (Save, or a Done'd move); any position change re-offers it.
-  const planPending =
-    !jamMode && suggestEnabled() && suggestion && suggestion.type === 'plan' && state.skipPlanKey !== state.positions.join(',');
-  const planHtml = planPending
-    ? `<div class="plan-suggest" style="margin-top:6px">
-        <div class="muted">${suggestion.reason}</div>
-        <div style="margin:4px 0;color:#fff">${suggestion.moves
-          .map((mv) => `${plateLabel(mv.plate)} <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span>`)
-          .join(' · ')}</div>
-        <span class="ap-btn primary" data-action="plan-done">Done ›</span>
-        <span class="ap-btn" data-action="plan-skip">Skip</span>
-       </div>`
-    : '';
   // One instruction line carries the whole loop: which slider, which move (when
   // suggestions are on; direction follows the recording's live deltaI), and how
   // to record the result. The board previews the move as a ghost → solid slide.
   const instructionHtml = jamMode
     ? `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Tap <b style="color:var(--gold)">∿</b> on every
         slide you saw wiggle, then <b>Done</b>. Optional — missing some is fine.</div>`
+    : planPending
+    ? `<div class="map-instruction plan-suggest" style="margin-top:6px;font-size:14px;color:#fff">Make it safer first — in the lock, slide
+        ${suggestion.moves
+          .map((mv) => `<b style="color:var(--gold)">${plateLabel(mv.plate)}</b> <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span>`)
+          .join(' → ')}.
+        <span class="ap-btn primary" data-action="plan-done" style="margin-left:8px" title="${escapeHtml(suggestion.reason)}">Done ›</span>
+        <span class="linklike" data-action="plan-skip" style="margin-left:6px">skip</span></div>`
     : !isActive
     ? `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`
     : reviewing
@@ -1258,7 +1258,7 @@ function mappingView() {
   // Per-user toggle: off hides the app's move guidance (preview, suggested-press text,
   // recommended-plate jump, Done/Skip plan) but keeps the edge/jam warning.
   const suggestToggleHtml = `<label class="ap-kbd" style="margin-top:4px"><input type="checkbox" data-action="toggle-suggest"${suggestEnabled() ? ' checked' : ''}> Suggest moves</label>`;
-  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${instructionHtml}${statusHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}${planHtml}`;
+  head.innerHTML = `<div class="ap-h">${title}</div>${suggestToggleHtml}${instructionHtml}${statusHtml}${jamHtml}${stuckHtml}${ghostLegendHtml}${suggestHtml}`;
   col.appendChild(head);
 
   // Ledger column headers: words live HERE, so the row buttons can stay compact
