@@ -13,6 +13,7 @@ import {
   dragOther,
   validRecording,
   samePositions,
+  restorableDraft,
 } from '../src/ui/mapping-record.js';
 
 test('suggestedDeltaI points toward center: -1 above the goal, +1 at or below', () => {
@@ -138,4 +139,21 @@ test('samePositions: true only when arrays are element-wise equal', () => {
   assert.equal(samePositions([4, 7, 2], [4, 7, 3]), false);
   assert.equal(samePositions([4, 7], [4, 7, 2]), false); // different lengths
   assert.equal(samePositions([], []), true);
+});
+
+test('restorableDraft: returns the draft when its baseline matches current positions', () => {
+  const draft = createRecording([4, 7, 2], 0); // baseline [4,7,2]
+  const drafts = { 0: draft };
+  assert.equal(restorableDraft(drafts, 0, [4, 7, 2]), draft);
+});
+
+test('restorableDraft: returns null when positions have changed (stale baseline)', () => {
+  const draft = createRecording([4, 7, 2], 0);
+  const drafts = { 0: draft };
+  assert.equal(restorableDraft(drafts, 0, [4, 7, 3]), null); // board moved since stash
+});
+
+test('restorableDraft: returns null when no draft exists for the plate', () => {
+  assert.equal(restorableDraft({}, 2, [4, 4, 4]), null);
+  assert.equal(restorableDraft(undefined, 2, [4, 4, 4]), null);
 });

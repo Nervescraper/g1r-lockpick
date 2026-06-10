@@ -101,3 +101,12 @@ export function samePositions(a, b) {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
 }
+
+// A stashed draft is restorable only if it exists AND its baseline still matches the live
+// board. Any committed move (Save, apply-move, jam) changes positions and invalidates every
+// stale draft, so switching back to such a plate builds a fresh recording instead.
+export function restorableDraft(drafts, plate, positions) {
+  const d = drafts && drafts[plate];
+  if (d && samePositions(d.baseline, positions)) return d;
+  return null;
+}
