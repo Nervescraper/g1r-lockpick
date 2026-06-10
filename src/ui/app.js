@@ -32,14 +32,12 @@ const CHANGELOG = [
   {
     date: '2026-06-09',
     items: [
-      'Slid a plate and it jammed? Click “It jammed” — the app remembers that move fails at those positions (even after a pick break) and guides you to a better one instead of repeating itself.',
-      'The app now tracks your pick like the game does: the first jam is a warning, the second breaks the pick — and the board resets itself to the start to match the snapped-back slides.',
-      'Saw slides wiggle when it jammed? Tap them on the jam note (optional) — any slide counts, since a wiggle means it’s linked. When only one slide sits on an edge the app identifies the blocker by itself, and it warns when your taps can’t include the real blocker.',
-      'Long stretches of the same move now step as one: the Next move card reads e.g. “P2 ▶ Right ×6” with a “Did all 6” button, so a 68-move solution takes ~20 clicks instead of 68.',
-      'When the edges can’t all be cleared with mapped moves, the app now suggests known moves that pull a slide off an edge; if every untried move jams, it offers a layout-changing one rather than leaving you guessing.',
-      'The mapping screen is now a ledger: every action lives on the slider rows under two labeled columns — “moved?” (⇉ with / ⇄ opposite) and “move it” (◀ ▶ for mapped slides) — with the column flipping to “wiggled?” while you acknowledge a jam. Full words on wide screens, symbols on phones.',
-      '“Edit positions” now only corrects where the slides are. The lock’s reset point stays put, so Reset always lands where the game actually snaps back to.',
-      'Pressing R to reset during mapping now behaves exactly like the Reset button — the move being recorded follows the reset instead of showing stale positions.',
+      'Jams now teach the app: click “It jammed”, tap any slides you saw wiggle, and it learns the links, stops suggesting moves that must fail, and names the blocker itself when only one slide sits on an edge.',
+      'Your pick is tracked like the game’s: the first jam is a warning, the second breaks it — and the board resets itself to match the snapped-back slides.',
+      'The mapping screen is now a compact ledger: everything sits on the slider rows under two columns — “moved?” (⇉ with / ⇄ opposite) and “move it” (◀ ▶ for mapped slides) — flipping to “wiggled?” after a jam. Words on wide screens, symbols on phones.',
+      'Click a mapped slide to review its links without changing anything; Cancel an accidental edit, or quietly forget that one slide’s mapping to redo it.',
+      'Solving long plans is lighter: same-direction runs step as one (“P2 ▶ Right ×6 — Did all 6”), and the Connections panel uses the same ⇉ / ⇄ icons.',
+      'Sharper guidance and fixes: known moves that free an edge are suggested when nothing is safe, “Edit positions” no longer moves the reset point, and R matches the Reset button exactly.',
     ],
   },
   {
