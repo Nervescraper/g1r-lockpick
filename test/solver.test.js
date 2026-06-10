@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { solve, countSwitches, planEdgeClear, planEdgeReduce, applySequence } from '../src/solver.js';
+import { solve, countSwitches, planEdgeClear, planEdgeReduce, applySequence, diagnoseDrift } from '../src/solver.js';
 import { applyMove, isSolved, legalMoves, MIN, MAX } from '../src/model.js';
 
 // helper: replay a solution, asserting every step stays in 1..7
@@ -366,6 +366,33 @@ test('planEdgeReduce frees one edge when a full clear is impossible', () => {
 test('planEdgeReduce returns null when known moves cannot free any edge', () => {
   // plate 0 (mapped, interior, self-moving) can never free plate 1's MIN edge.
   assert.equal(planEdgeReduce([4, 1], [[1, 0], [0, 1]], [0]), null);
+});
+
+test('diagnoseDrift names the row whose recorded cell lied', () => {
+  // Recorded: sliding P2 moves P3 opposite. The real lock moved it WITH, so two
+  // R-presses of P2 predicted P3 at +2 when it really went −2.
+  const coupling = [[1, 0, 0], [0, 1, -1], [0, -1, 1]];
+  const predicted = [4, 2, 6]; // start [4,4,4] + 2× P2 R under the recording
+  const observed = [4, 2, 2]; // what the lock actually shows
+  const rep = diagnoseDrift(observed, predicted, [{ plate: 1, dir: 'R' }, { plate: 1, dir: 'R' }], coupling);
+  assert.deepEqual(rep.drifted, [2]);
+  assert.equal(rep.suspects.length, 1);
+  assert.equal(rep.suspects[0].plate, 1);
+});
+
+test('diagnoseDrift returns null with no drift or no executed moves', () => {
+  const coupling = [[1, 0], [0, 1]];
+  assert.equal(diagnoseDrift([4, 4], [4, 4], [{ plate: 0, dir: 'L' }], coupling), null);
+  assert.equal(diagnoseDrift([4, 5], [4, 4], [], coupling), null);
+});
+
+test('diagnoseDrift never blames a slide for drift on itself', () => {
+  // Only P1 was pressed and only P1's own position is off — its self-cell is
+  // definitionally 1, so nothing can explain this (a missed/doubled move).
+  const coupling = [[1, 0], [0, 1]];
+  const rep = diagnoseDrift([6, 4], [5, 4], [{ plate: 0, dir: 'L' }], coupling);
+  assert.deepEqual(rep.drifted, [0]);
+  assert.deepEqual(rep.suspects, []);
 });
 
 test('applySequence returns a copy of positions for an empty move list', () => {

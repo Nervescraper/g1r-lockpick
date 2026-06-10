@@ -1,4 +1,4 @@
-import { applyMove, isSolved, isLegal, legalMoves, allInterior, GOAL, MIN, MAX } from './model.js';
+import { applyMove, isSolved, isLegal, legalMoves, allInterior, GOAL, MIN, MAX, dirSign } from './model.js';
 import { MinHeap } from './heap.js';
 import { transpose, det, adjugate, matVec } from './linalg.js';
 
@@ -105,6 +105,41 @@ function reconstruct(parent, goalKey, startKey) {
     k = prev;
   }
   return moves.reverse();
+}
+
+// After an in-game divergence: rank which recorded rows most likely lied.
+// `executed` are the plan moves performed before the player entered the lock's
+// REAL positions. The drift (observed − predicted) decomposes as
+// Σ_p s_p · err_p, where s_p is plate p's net signed press count and err_p its
+// row's recording error — so a row can explain a drifted component only if it
+// was pressed, its net count divides the drift there, and the implied real
+// cell stays within −1..1. Underdetermined when several rows were pressed:
+// this is a ranked hint list, not a proof. Returns null when nothing drifted
+// (or nothing was executed — then there is no signal at all).
+export function diagnoseDrift(observed, predicted, executed, coupling) {
+  const n = observed.length;
+  const diff = observed.map((v, j) => v - predicted[j]);
+  const drifted = [];
+  for (let j = 0; j < n; j++) if (diff[j] !== 0) drifted.push(j);
+  if (!drifted.length || !executed.length) return null;
+  const s = Array(n).fill(0);
+  for (const mv of executed) s[mv.plate] += dirSign(mv.dir);
+  const suspects = [];
+  for (let p = 0; p < n; p++) {
+    if (!s[p]) continue; // unpressed (or net-zero) rows leave no trace
+    let explains = 0;
+    for (const j of drifted) {
+      if (j === p) continue; // a slide always moves itself — its own cell can't lie
+      if (diff[j] % s[p] !== 0) continue;
+      const err = diff[j] / s[p];
+      if (err === 0 || err < -2 || err > 2) continue;
+      const real = coupling[p][j] + err;
+      if (real >= -1 && real <= 1) explains++;
+    }
+    if (explains) suspects.push({ plate: p, explains });
+  }
+  suspects.sort((a, b) => b.explains - a.explains);
+  return { drifted, suspects };
 }
 
 // Advance positions through a known move sequence (each move is a press of a plate

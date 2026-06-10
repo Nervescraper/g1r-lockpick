@@ -1,7 +1,7 @@
 import { createBoard } from './board.js';
 import { nextActivePlate } from './active-plate.js';
 import { applyMove, moveDelta, isSolved, isLegal, GOAL, MIN, MAX } from '../model.js';
-import { solve } from '../solver.js';
+import { solve, diagnoseDrift } from '../solver.js';
 import {
   createRecording, tagOf, positionsOf, couplingRow,
   toggleTag, dragActive, dragOther, validRecording, setActiveDir,
@@ -40,6 +40,7 @@ const CHANGELOG = [
       'Sharper guidance and fixes: known moves that free an edge are suggested when nothing is safe, “Edit positions” no longer moves the reset point, and R matches the Reset button exactly.',
       'Sharing is quicker: the Lock open! screen shows the lock’s share code with a Copy button, and pasting a code on the Lock page imports it on the spot.',
       'Mis-slid in the game? “Oops…” counts the stray jam (while mapping or solving) so pick durability stays in sync — the second mistake breaks the pick and the board resets itself to match.',
+      'Solution failed in the game? Enter the lock’s real positions via “Edit positions” — the app works out which recorded rows could explain the drift and offers a one-tap review of the suspects.',
     ],
   },
   {
@@ -1679,6 +1680,25 @@ function solvePanel(side, boardProps) {
 
   if (state.plan === undefined) initSolve();
 
+  // After an Edit positions that contradicted the plan's prediction: name the
+  // rows that could explain the drift, with a one-tap jump to review them.
+  if (state.driftReport) {
+    const rep = state.driftReport;
+    const where = rep.drifted.map(plateLabel).join(', ');
+    const top = rep.suspects.slice(0, 2);
+    const note = document.createElement('div');
+    note.innerHTML = `<div class="note" style="margin:0 0 10px">The lock isn't where the mapping predicted — off on <b>${where}</b>.${
+      top.length
+        ? ` Most likely mis-recorded: ${top.map((sp) => `<b>${plateLabel(sp.plate)}</b>`).join(', then ')}.`
+        : ' None of the executed moves can explain it alone — re-check the rows you trust least, and that no move was missed or doubled.'
+    }<div style="margin-top:6px">${
+      top.length
+        ? top.map((sp) => `<span class="ap-btn" data-action="drift-review" data-plate="${sp.plate}">Review ${plateLabel(sp.plate)} ›</span>`).join(' ')
+        : `<span class="ap-btn" data-action="back-to-map">Back to mapping</span>`
+    }</div></div>`;
+    side.appendChild(note.firstElementChild);
+  }
+
   if (state.plan === null) {
     const card = document.createElement('div');
     card.className = 'ap-card';
@@ -1798,6 +1818,7 @@ function resetPinsToInitial() {
   if (!state.initial) return;
   state.positions = state.initial.slice();
   state.pickMistakes = 0; // slides only snap back when a pick breaks — assume a fresh pick
+  state.driftReport = undefined; // a reset starts from a known state
   if (state.stage === 'solve') state.plan = undefined; // re-plan from the reset point
   if (state.stage === 'discovery') {
     state.skipPlanKey = undefined;
@@ -1859,7 +1880,7 @@ appEl.addEventListener('click', (e) => {
       discardPendingEdit();
       if (target === 'lock') state.stage = 'lock';
       else if (target === 'setup') { state.stage = 'setup'; state.activePlate = 0; }
-      else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; state.rec = null; suggestDefault(); }
+      else if (target === 'discovery' && state.mapping) { state.stage = 'discovery'; state.activePlate = undefined; state.rec = null; state.driftReport = undefined; suggestDefault(); }
       else if (target === 'solve' && state.mapping) { state.stage = 'solve'; state.plan = undefined; }
       break;
     }
@@ -1944,6 +1965,13 @@ appEl.addEventListener('click', (e) => {
       // edits and return to the passive review (saved links, committed board).
       if (state.activePlate != null) seedRecording(state.activePlate);
       break;
+    case 'drift-review':
+      // Jump from the drift diagnosis straight into reviewing the suspect row.
+      state.driftReport = undefined;
+      state.stage = 'discovery';
+      state.skipPlanKey = undefined;
+      seedRecording(+t.dataset.plate);
+      break;
     case 'delete-plate': {
       // Forget ONE slide's mapping: its recorded row, its jam notes, and its
       // wiggle links — so it can be mapped fresh. Everything physical (slide
@@ -2009,6 +2037,7 @@ appEl.addEventListener('click', (e) => {
       if (state.plan && state.planIndex < state.plan.length) {
         state.planIndex++;
         state.positions = computeSolvePositions();
+        state.driftReport = undefined; // moving on with the new plan
       }
       break;
     case 'did-run':
@@ -2017,6 +2046,7 @@ appEl.addEventListener('click', (e) => {
       if (state.plan && state.planIndex < state.plan.length) {
         state.planIndex = Math.min(state.plan.length, state.planIndex + (+t.dataset.count || 1));
         state.positions = computeSolvePositions();
+        state.driftReport = undefined; // moving on with the new plan
       }
       break;
     case 'goto-step': {
@@ -2036,12 +2066,19 @@ appEl.addEventListener('click', (e) => {
       // on a pick break, so overwriting it would desync every later Reset. To
       // change the reset point itself, adjust the pins in Setup and re-enter
       // mapping (start-mapping re-snapshots it).
+      //
+      // If the entered positions differ from what the executed plan predicted,
+      // the mapping lied somewhere — diagnose which rows could explain it.
+      state.driftReport =
+        state.editBackup && Array.isArray(state.plan) && state.planIndex > 0
+          ? diagnoseDrift(state.positions, state.editBackup, state.plan.slice(0, state.planIndex), state.mapping.coupling)
+          : undefined;
       state.editing = false;
       state.editBackup = undefined;
       state.plan = undefined;
       break;
     case 'cancel-edit': discardPendingEdit(); break;
-    case 'back-to-map': state.stage = 'discovery'; break;
+    case 'back-to-map': state.stage = 'discovery'; state.driftReport = undefined; break;
     case 'load-lock': {
       const lock = getLock(store, t.dataset.id);
       if (lock) {

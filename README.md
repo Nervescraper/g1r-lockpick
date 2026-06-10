@@ -34,7 +34,10 @@ The app moves through four steps, shown as a clickable rail across the top:
    "Did all N" step. Reset the pins anytime to re-plan.
 
 If the solver reports **no solution**, the mapping is almost certainly incomplete or has a
-wrong cell — head back to **Map the lock** and double-check.
+wrong cell — head back to **Map the lock** and double-check. If a solution **fails in the
+game** (the lock stops matching the board), use **Edit positions** to enter where the pins
+really are: the app compares the drift against the moves you made and names the rows most
+likely mis-recorded, with a one-tap jump to review them.
 
 ## Keyboard shortcuts
 

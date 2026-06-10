@@ -468,7 +468,58 @@ try {
     if (!(await d.solveLock({ enter: false }))) d.issue('ui', 'could not finish the solve after an Oops break');
   });
 
-  // 9 · Save / Start over / load roundtrip.
+  // 9 · Drift diagnosis: a solution that fails in-game (one recorded row lies).
+  // The player follows the plan until the lock visibly disagrees, enters the
+  // REAL positions via Edit positions, and the app must name the lying row.
+  await scenario(browser, 'drift-diagnosis', { width: 1280, height: 900 }, async (d, page) => {
+    // Real lock: P1 moves only itself. Recorded mapping lies: claims P1 drags
+    // P3 with it. P2/P3 rows are recorded truthfully.
+    const real = { id: 'driftcase', n: 3, coupling: [[1, 0, 0], [0, 1, 1], [0, -1, 1]], initial: [2, 4, 4] };
+    const recorded = [[1, 0, 1], [0, 1, 1], [0, -1, 1]];
+    d.lock = real;
+    d.game = new (d.game.constructor)(real);
+    const session = {
+      stage: 'solve', n: real.n, positions: real.initial.slice(), initial: real.initial.slice(),
+      mapping: { n: real.n, coupling: recorded, status: Array(real.n).fill('done') },
+      location: '', kind: 'Chest', description: '', contents: [], lockLoaded: true,
+    };
+    await page.addInitScript((s) => localStorage.setItem('g1r.session', JSON.stringify(s)), session);
+    await page.goto(BASE_URL);
+    await page.waitForSelector('.ap-nm');
+
+    // Follow the plan in the real lock until the board stops matching it.
+    let diverged = false;
+    for (let i = 0; i < 30 && !(await page.$('.success')); i++) {
+      const nm = await d.text('.ap-nm');
+      const m = nm && nm.match(/P(\d+)\s*[◀▶]\s*(Left|Right)/);
+      if (!m) break;
+      d.game.press(+m[1] - 1, m[2] === 'Left' ? 'L' : 'R'); // blocked or not — the lock does what it does
+      await d.click('did-it');
+      const board = await d.boardPositions();
+      if (board && board.join(',') !== d.game.positions.join(',')) { diverged = true; break; }
+    }
+    if (!diverged) { d.issue('deadend', 'drift scenario never diverged — fixture no longer lies?'); return; }
+
+    // Tell the app where the lock REALLY is.
+    await d.click('edit-positions');
+    for (let i = 0; i < real.n; i++) await d.dragSlideTo(i, d.game.positions[i]);
+    await d.click('apply-edit');
+
+    // The diagnosis must finger P1 (the lying row) with a one-tap review.
+    const reviewP1 = await page.$('[data-action="drift-review"][data-plate="0"]');
+    if (!reviewP1) {
+      const side = (await d.text('.ap-side')) || '';
+      d.issue('ui', `drift diagnosis did not name P1: "${side.slice(0, 120)}"`);
+      await d.shot('drift-not-diagnosed');
+      return;
+    }
+    await d.shot('drift-diagnosed');
+    await reviewP1.click();
+    const instr = (await d.text('.map-instruction')) || '';
+    if (!instr.includes('Reviewing P1')) d.issue('ui', `Review P1 did not land on P1's review: "${instr.slice(0, 80)}"`);
+  });
+
+  // 10 · Save / Start over / load roundtrip.
   await scenario(browser, 'save-load', { width: 1280, height: 800 }, async (d, page) => {
     d.lock = LOCKS[0];
     d.game = new (d.game.constructor)(d.lock);
