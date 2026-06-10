@@ -1335,7 +1335,8 @@ function mappingView() {
   const saveBlock = jamMode
     ? `<span class="ap-btn primary" data-action="jam-done">Done ›</span> ${resetBtn}`
     : reviewing && !state.recTouched
-    ? `<div class="muted">Viewing a mapped slide — nothing is being changed. Drag it or tap a tag to start re-recording.</div>`
+    ? `<div class="muted">Viewing a mapped slide — nothing is being changed. Drag it or tap a tag to start re-recording.
+         <span class="linklike" data-action="delete-plate" style="float:right">forget ${plateLabel(active)}’s mapping…</span></div>`
     : isActive
     ? `${recInvalid ? `<div class="note" style="margin-top:0;color:var(--danger)">⚠ This tag would push a slide past an edge — a real move can't do that (it would jam). Re-tag, or clear the edge first.</div>` : ''}<span class="ap-btn primary${recInvalid ? ' disabled' : ''}" data-action="save-next">Save plate ›</span>
        <span class="ap-btn" data-action="probe-jammed" title="The move was blocked at an edge — nothing moved. Tells the app so it stops suggesting it here.">It jammed ⚠</span>${
@@ -1852,6 +1853,25 @@ appEl.addEventListener('click', (e) => {
       // edits and return to the passive review (saved links, committed board).
       if (state.activePlate != null) seedRecording(state.activePlate);
       break;
+    case 'delete-plate': {
+      // Forget ONE slide's mapping: its recorded row, its jam notes, and its
+      // wiggle links — so it can be mapped fresh. Everything physical (slide
+      // positions, reset point, pick damage) and every other row is kept.
+      const i = state.activePlate;
+      if (i == null || !state.mapping) break;
+      if (!window.confirm(`Forget ${plateLabel(i)}’s mapping? Its recorded links and jam notes are cleared so it can be mapped fresh. Slide positions and the other rows are kept.`)) break;
+      const row = Array(state.n).fill(0);
+      row[i] = 1;
+      state.mapping.coupling[i] = row;
+      state.mapping.status[i] = 'unstarted';
+      state.knownLinks = (state.knownLinks || []).filter((k) => !k.startsWith(`${i}|`));
+      state.blockedProbes = (state.blockedProbes || []).filter((k) => +k.split('|')[1] !== i);
+      state.lockLoaded = false;
+      state.plan = undefined;
+      state.skipPlanKey = undefined;
+      suggestDefault();
+      break;
+    }
     case 'jam-wiggle': {
       // The player saw this plate wiggle on the jam they just reported: linked
       // to the jammed plate for sure. The SIGN is only known when this slide is

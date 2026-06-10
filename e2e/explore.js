@@ -385,6 +385,22 @@ try {
     const tagRestored = await page.$('[data-action="set-rel"][data-plate="0"][data-rel="opposite"].on-opp');
     if (!tagRestored) d.issue('ui', 'Cancel did not restore the saved tag (P1 should be back to opposite)');
     await d.shot('review-cancelled');
+
+    // The quiet escape hatch: forget ONE slide's mapping from its review state.
+    // P3's row goes back to unstarted; every other row and the positions stay.
+    const del = await page.$('[data-action="delete-plate"]');
+    if (!del) { d.issue('ui', 'no forget-this-slide control while reviewing a mapped plate'); return; }
+    page.once('dialog', (dlg) => dlg.accept());
+    await del.click();
+    const headTxt = (await d.text('.map-wrap .ap-card')) || '';
+    if (!headTxt.includes(`4 of ${gomez.n} mapped`)) {
+      d.issue('ui', `forgetting one slide should leave the others: "${headTxt.slice(0, 60)}"`);
+    }
+    const doneNow = await d.donePlates();
+    if (doneNow.has(2)) d.issue('ui', "P3 still shows as mapped after forgetting its row");
+    if (doneNow.size !== 4) d.issue('ui', `expected the other 4 rows to survive, got ${doneNow.size}`);
+    await d.expectBoardMatchesGame('after forgetting one slide (positions must be untouched)');
+    await d.shot('plate-forgotten');
   });
 
   // 8 · Save / Start over / load roundtrip.

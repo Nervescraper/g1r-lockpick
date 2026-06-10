@@ -346,6 +346,10 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 
 .ms-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 
+/* quiet text-style action for rare, destructive-ish operations */
+.linklike { color: #6b665c; font-size: 11px; text-decoration: underline dotted; cursor: pointer; }
+.linklike:hover { color: #a89; }
+
 /* ---- mapping ledger: per-row symbol buttons under labeled column headers.
    Column widths live in vars so the header line and every row stay aligned —
    defined on .map-wrap because the header sits OUTSIDE the board element;
