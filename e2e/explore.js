@@ -299,9 +299,25 @@ try {
       }],
     };
     const code = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
-    await d.click('import-open');
-    await page.fill('[data-action="import-text"]', code);
-    await d.click('import-parse');
+    // Paste-to-import: pasting the code on the Lock page must land directly on
+    // the import results screen (no clicking through Import).
+    const pasted = await page.evaluate((c) => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', c);
+      return document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    }, code).then(() => page.waitForSelector('.import-col', { timeout: 2000 }).then(() => true).catch(() => false));
+    if (pasted) {
+      const resTxt = (await d.text('.import-col')) || '';
+      if (!/1 new imported|already present/.test(resTxt)) {
+        d.issue('ui', `paste-to-import did not reach the results screen: "${resTxt.slice(0, 60)}"`);
+      }
+    } else {
+      d.issue('ui', 'pasting a share code on the Lock page did not open import results');
+      // fall back to the manual flow so the rest of the scenario still runs
+      await d.click('import-open');
+      await page.fill('[data-action="import-text"]', code);
+      await d.click('import-parse');
+    }
     await d.click('import-done');
     await page.click('[data-action="load-lock"][data-id="lock-gomez-e2e"]');
     await page.waitForSelector('.ap-nm');

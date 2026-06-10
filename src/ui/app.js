@@ -38,6 +38,7 @@ const CHANGELOG = [
       'Click a mapped slide to review its links without changing anything; Cancel an accidental edit, or quietly forget that one slide’s mapping to redo it.',
       'Solving long plans is lighter: same-direction runs step as one (“P2 ▶ Right ×6 — Did all 6”), and the Connections panel uses the same ⇉ / ⇄ icons.',
       'Sharper guidance and fixes: known moves that free an edge are suggested when nothing is safe, “Edit positions” no longer moves the reset point, and R matches the Reset button exactly.',
+      'Sharing is quicker: the Lock open! screen shows the lock’s share code with a Copy button, and pasting a code on the Lock page imports it on the spot.',
     ],
   },
   {
@@ -2195,6 +2196,23 @@ window.addEventListener('keydown', (e) => {
   else return; // already at an end — nothing changes
   state.positions = computeSolvePositions();
   if (planModalOpen) refreshPlanModal(); else render();
+});
+
+// Paste-to-import: on the Lock step, pasting a share/export code anywhere on
+// the page (not into a text field) imports it immediately and lands on the
+// results screen — no need to open Import first. Anything that isn't a valid
+// code pastes normally.
+window.addEventListener('paste', (e) => {
+  if (state.stage !== 'lock') return;
+  const tag = (e.target.tagName || '').toUpperCase();
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return; // typing fields keep normal paste
+  const text = (e.clipboardData?.getData('text') || '').trim();
+  if (!text || !parseImport(text)) return;
+  e.preventDefault();
+  state.stage = 'import';
+  state.import = { phase: 'input', text };
+  runImportParse();
+  render();
 });
 
 // Read a chosen backup file into the import state, then re-render to show its name.
