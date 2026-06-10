@@ -338,6 +338,10 @@ function saveActivePlate() {
   state.mapping.status[rec.active] = 'done';
   // The full row is now observed truth — soft links for this plate are superseded.
   state.knownLinks = (state.knownLinks || []).filter((k) => !k.startsWith(`${rec.active}|`));
+  // This row is committed truth now — discard its tentative draft, and mark the recording
+  // clean so the upcoming re-seed doesn't re-stash the just-saved work.
+  state.recTouched = false;
+  if (state.recDrafts) delete state.recDrafts[rec.active];
   suggestDefault(); // re-seed the next recording against the new positions
 }
 
