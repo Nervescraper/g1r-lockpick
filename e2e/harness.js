@@ -320,23 +320,20 @@ export class Driver {
       const posKey = positions.join(',');
       const done = await this.donePlates();
 
-      // Tier 2 guidance: an edge-clearing plan of known moves. Do it in the lock too.
-      const planEl = await this.page.$('.plan-suggest');
-      if (planEl) {
-        const planText = await planEl.textContent();
-        const moves = [...planText.matchAll(/P(\d+)\s*[◀▶]\s*(Left|Right)/g)];
-        let bad = false;
-        for (const m of moves) {
-          const r = this.game.press(+m[1] - 1, DIR_CODE[m[2]]);
-          if (r.blocked) {
-            this.issue('solver', `edge-clear plan move P${m[1]} ${m[2]} blocked the lock — the app called it safe`);
-            bad = true;
-            break;
-          }
+      // Tier 2 guidance: a repositioning plan, lit up on the grid one move at a
+      // time. Do the lit move in the lock, then tap its arrow; the next move
+      // lights up on the following render.
+      const lit = await this.page.$('[data-action="apply-move"].plan-next');
+      if (lit) {
+        const plate = +(await lit.getAttribute('data-plate'));
+        const dir = await lit.getAttribute('data-dir');
+        const r = this.game.press(plate, dir);
+        if (r.blocked) {
+          this.issue('solver', `lit safety move P${plate + 1} ${dir} blocked the lock — the app called it safe`);
+          return false;
         }
-        if (bad) return false;
-        await this.click('plan-done');
-        await this.expectBoardMatchesGame('after edge-clear plan');
+        await lit.click();
+        await this.expectBoardMatchesGame(`after lit safety move P${plate + 1}${dir}`);
         continue;
       }
 

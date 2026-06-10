@@ -1,7 +1,7 @@
 import { createBoard } from './board.js';
 import { nextActivePlate } from './active-plate.js';
 import { applyMove, moveDelta, isSolved, isLegal, GOAL, MIN, MAX } from '../model.js';
-import { solve, applySequence } from '../solver.js';
+import { solve } from '../solver.js';
 import {
   createRecording, tagOf, positionsOf, couplingRow,
   toggleTag, dragActive, dragOther, validRecording, setActiveDir,
@@ -1232,11 +1232,10 @@ function mappingView() {
     ? `<div class="map-instruction" style="margin-top:6px;font-size:14px;color:#fff">Tap <b style="color:var(--gold)">∿</b> on every
         slide you saw wiggle, then <b>Done</b>. Optional — missing some is fine.</div>`
     : planPending
-    ? `<div class="map-instruction plan-suggest" style="margin-top:6px;font-size:14px;color:#fff">Make it safer first — in the lock, slide
+    ? `<div class="map-instruction plan-suggest" style="margin-top:6px;font-size:14px;color:#fff" title="${escapeHtml(suggestion.reason)}">Make it safer first:
         ${suggestion.moves
           .map((mv) => `<b style="color:var(--gold)">${plateLabel(mv.plate)}</b> <span class="dir">${dirArrow(mv.dir)} ${DIR_WORD[mv.dir]}</span>`)
-          .join(' → ')}.
-        <span class="ap-btn primary" data-action="plan-done" style="margin-left:8px" title="${escapeHtml(suggestion.reason)}">Done ›</span>
+          .join(' → ')} — do each in the lock, then tap its lit arrow below.
         <span class="linklike" data-action="plan-skip" style="margin-left:6px">skip</span></div>`
     : !isActive
     ? `<div class="muted">All plates mapped (green). Click any plate to review or fix it, or continue to Solve.</div>`
@@ -1281,6 +1280,8 @@ function mappingView() {
   // plate's arrows reposition it, while its cell in the active row is its own
   // unknown to tag.
   const jn = state.jamNotice;
+  // The repositioning plan's next physical action, lit up on its own row.
+  const planFirst = planPending ? suggestion.moves[0] : null;
   const rowsRight = state.positions.map((_, i) => {
     // Rows carry controls while there's a recording (including re-recording a
     // mapped plate after the lock is fully mapped) or a jam acknowledgement.
@@ -1290,9 +1291,13 @@ function mappingView() {
         // Repositioning is a mapping-phase tool; during a review of a fully
         // mapped lock the arrows stay dormant (Solve has Edit positions).
         const ok = !done && m.status[i] === 'done' && isLegal(state.positions, m.coupling, i, d);
-        return ok
-          ? `<span class="led-btn" data-action="apply-move" data-plate="${i}" data-dir="${d}" title="Slide ${plateLabel(i)} ${DIR_WORD[d]} (a mapped move — do it in the lock too)">${dirArrow(d)}</span>`
-          : `<span class="led-btn dis">${dirArrow(d)}</span>`;
+        if (!ok) return `<span class="led-btn dis">${dirArrow(d)}</span>`;
+        const lit = planFirst && planFirst.plate === i && planFirst.dir === d;
+        return `<span class="led-btn${lit ? ' plan-next' : ''}" data-action="apply-move" data-plate="${i}" data-dir="${d}" title="${
+          lit
+            ? `Next safety move: slide ${plateLabel(i)} ${DIR_WORD[d]} in the lock, then tap here.`
+            : `Slide ${plateLabel(i)} ${DIR_WORD[d]} (a mapped move — do it in the lock too)`
+        }">${dirArrow(d)}</span>`;
       })
       .join('');
     const moveGroup = `<span class="led-group move">${moveBtns}</span>`;
@@ -1306,7 +1311,13 @@ function mappingView() {
         </span>${moveGroup}</span>`;
     }
 
-    if (i === active) return `<span class="led-row"><span class="led-group"><span class="self-note">sliding</span></span>${moveGroup}</span>`;
+    // While a plan is pending, the queued recording isn't the ask — don't
+    // label its row "sliding" yet.
+    if (i === active) {
+      return `<span class="led-row"><span class="led-group">${
+        planPending ? '' : '<span class="self-note">sliding</span>'
+      }</span>${moveGroup}</span>`;
+    }
     if (active == null) return '';
     const r = state.rec ? tagOf(state.rec, i) : 'none';
     // ∿ marks a soft link (wiggled on one of the active plate's jams, direction
@@ -1361,11 +1372,12 @@ function mappingView() {
     selectable: true,
     // While acknowledging a jam, the board belongs to that jam: highlight the
     // slide that jammed (not the next one the recommender already queued up),
-    // and pause dragging until the player taps Done.
-    draggable: !jamMode && active != null,
+    // and pause dragging until the player taps Done. While a plan is pending,
+    // the spotlight follows the plan's next move instead.
+    draggable: !jamMode && !planPending && active != null,
     onSetPosition: onMapDrag,
     onClick: onMapClick,
-    highlightPlate: jamMode ? jn.plate : active,
+    highlightPlate: jamMode ? jn.plate : planPending ? planFirst.plate : active,
     labels,
     rowsRight,
   });
@@ -1834,16 +1846,6 @@ appEl.addEventListener('click', (e) => {
       break;
     }
 
-    case 'plan-done': {
-      // Apply the known edge-clearing sequence to the live positions, then re-seed.
-      const rec = allMapped(state.mapping) ? null : recommendNext(state.positions, state.mapping, blockedNow(), softLinksSet());
-      if (rec && rec.type === 'plan') {
-        state.positions = applySequence(state.positions, state.mapping.coupling, rec.moves);
-        state.skipPlanKey = undefined; // positions changed; future plans are fresh
-        suggestDefault();
-      }
-      break;
-    }
     case 'plan-skip':
       state.skipPlanKey = state.positions.join(','); // dismiss until positions change
       break;

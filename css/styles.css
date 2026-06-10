@@ -369,6 +369,12 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 .led-btn.on-opp { color: var(--danger); border-color: #5c2f24; }
 .led-btn.on-wig { color: var(--gold); border-color: #6b5a2b; }
 .led-btn.dis { opacity: 0.25; cursor: default; pointer-events: none; }
+/* the repositioning plan's next move, lit up right in the grid */
+@keyframes plan-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--gold), 0 0 3px #c9a44a44; }
+  50% { box-shadow: 0 0 0 1px var(--gold), 0 0 9px #c9a44a88; }
+}
+.led-btn.plan-next { color: var(--gold); border-color: var(--gold); animation: plan-pulse 1.6s ease-in-out infinite; }
 @media (max-width: 560px) {
   .map-wrap { --led-tag: 62px; --led-move: 58px; }
   .led-btn .led-word { display: none; }
