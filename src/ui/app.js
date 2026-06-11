@@ -25,10 +25,16 @@ const DIR_WORD = { L: 'Left', R: 'Right' };
 // Bump when a changelog update should re-show the "New" badge on the Changelog
 // button. Leave unchanged for silent edits (typos, rewording) that shouldn't
 // re-notify users who've already seen the latest entries.
-const CHANGELOG_VERSION = '1.3.0';
+const CHANGELOG_VERSION = '1.4.0';
 
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
+  {
+    date: '2026-06-10',
+    items: [
+      'Search your saved locks by what’s inside them: type an item to show only chests that contain it, or prefix a term with “-” to hide chests that have it (e.g. “gold -sword”). Item names autocomplete from everything across your saved locks.',
+    ],
+  },
   {
     date: '2026-06-09',
     items: [
