@@ -122,9 +122,11 @@ export function suggestItems(names, token, alreadyChosen, limit = 8) {
   if (!t) return [];
   const chosen = alreadyChosen instanceof Set ? alreadyChosen : new Set(alreadyChosen || []);
   return names
-    .filter((n) => n.toLowerCase().includes(t) && !chosen.has(n.toLowerCase()))
-    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
-    .slice(0, limit);
+    .map((n) => [n, n.toLowerCase()])
+    .filter(([, l]) => l.includes(t) && !chosen.has(l))
+    .sort(([, a], [, b]) => a.localeCompare(b))
+    .slice(0, limit)
+    .map(([n]) => n);
 }
 
 export { RECENT_LIMIT, OTHER_KEY };

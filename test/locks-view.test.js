@@ -136,4 +136,5 @@ test('suggestItems: empty token yields nothing; respects the cap', () => {
   assert.deepEqual(suggestItems(['Gold'], '', new Set()), []);
   const many = Array.from({ length: 12 }, (_, i) => `Ore ${String.fromCharCode(97 + i)}`);
   assert.equal(suggestItems(many, 'ore', new Set(), 8).length, 8);
+  assert.deepEqual(suggestItems(['Ore c', 'Ore a', 'Ore b'], 'ore', new Set(), 2), ['Ore a', 'Ore b']);
 });
