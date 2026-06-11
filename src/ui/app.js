@@ -2602,6 +2602,13 @@ window.addEventListener('keydown', (e) => {
   const tag = (e.target.tagName || '').toUpperCase();
   if (tag === 'INPUT' || tag === 'TEXTAREA') return; // don't hijack typing or the toggle
 
+  // "/" — jump focus to the saved-lock contents search box, when it's on screen.
+  if (e.key === '/') {
+    const box = document.getElementById('lock-search');
+    if (box) { e.preventDefault(); box.focus(); }
+    return;
+  }
+
   // The full-plan modal stays open while you step through it: the stepping keys move
   // the current step and refresh the modal in place. Only the backdrop, the Close
   // button, or Esc (handled by the modal's own capture listener) dismiss it.
