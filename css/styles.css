@@ -244,6 +244,29 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
 /* Inset the rows so they read as belonging to the folder above them. */
 .lock-folder .lock-list { margin-left: 10px; }
 
+/* ---- saved-lock contents search ---- */
+.lock-search { position: relative; margin-bottom: 10px; }
+.ls-input {
+  width: 100%; box-sizing: border-box; padding: 7px 28px 7px 10px;
+  background: #141310; border: 1px solid #3a3833; border-radius: 6px;
+  color: #e8e2d6; font-size: 13px;
+}
+.ls-input:focus { outline: none; border-color: var(--gold); }
+.ls-clear {
+  position: absolute; right: 8px; top: 7px; cursor: pointer; color: #8a8378;
+  font-size: 13px; user-select: none;
+}
+.ls-clear:hover { color: var(--gold); }
+.ls-clear.hidden { display: none; }
+.ls-suggest {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 20;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin-top: 2px; overflow: hidden;
+}
+.ls-suggest:empty { display: none; }
+.ls-opt { padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.ls-opt:hover, .ls-opt.sel { background: rgba(255, 255, 255, 0.07); color: var(--gold); }
+
 /* ---- contents (loot) editor ---- */
 .contents-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .ct-row { display: flex; align-items: center; gap: 6px; }
