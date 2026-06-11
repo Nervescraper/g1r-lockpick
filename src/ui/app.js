@@ -1017,7 +1017,7 @@ function searchBarHtml() {
       placeholder="Search contents…  e.g. gold -sword" data-action="search-input"
       value="${escapeHtml(q)}" />
     <span id="lock-clear" class="ls-clear${q ? '' : ' hidden'}" data-action="clear-search" title="Clear search">✕</span>
-    <div id="lock-suggest" class="ls-suggest">${suggestDropdownHtml()}</div>
+    <div id="lock-suggest" class="ls-suggest"></div>
   </div>`;
 }
 
@@ -2560,7 +2560,7 @@ appEl.addEventListener('keydown', (e) => {
     if (sg) sg.innerHTML = suggestDropdownHtml();
   } else if (e.key === 'ArrowUp' && sugg.length) {
     e.preventDefault();
-    state.searchSel = (state.searchSel - 1 + sugg.length) % sugg.length;
+    state.searchSel = (Math.max(state.searchSel, 0) - 1 + sugg.length) % sugg.length;
     const sg = document.getElementById('lock-suggest');
     if (sg) sg.innerHTML = suggestDropdownHtml();
   } else if (e.key === 'Enter') {
