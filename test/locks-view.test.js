@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupLocks, parseSearch, matchLockContents, filterLocks } from '../src/locks-view.js';
+import { groupLocks, parseSearch, matchLockContents, filterLocks, allItemNames, suggestItems } from '../src/locks-view.js';
 
 const lock = (id, location, updatedAt) => ({ id, location, updatedAt });
 const withItems = (id, ...items) => ({ id, contents: items.map((item) => ({ item, qty: 1 })) });
@@ -115,4 +115,25 @@ test('filterLocks: keeps matching locks in original order', () => {
   const locks = [withItems('a', 'Gold'), withItems('b', 'Sword'), withItems('c', 'Gold', 'Sword')];
   assert.deepEqual(filterLocks(locks, parseSearch('gold')).map((l) => l.id), ['a', 'c']);
   assert.deepEqual(filterLocks(locks, parseSearch('-gold')).map((l) => l.id), ['b']);
+});
+
+test('allItemNames: distinct names, case-insensitive dedupe, first-seen casing', () => {
+  const locks = [withItems('a', 'Gold', '  '), withItems('b', 'gold', 'Iron Ore')];
+  assert.deepEqual(allItemNames(locks), ['Gold', 'Iron Ore']);
+});
+
+test('allItemNames: tolerates missing/blank contents', () => {
+  assert.deepEqual(allItemNames([{ id: 'a' }, { id: 'b', contents: [] }]), []);
+});
+
+test('suggestItems: substring match, sorted, excludes already-chosen', () => {
+  const names = ['Iron Ore', 'Ore chunk', 'Gold'];
+  assert.deepEqual(suggestItems(names, 'ore', new Set()), ['Iron Ore', 'Ore chunk']);
+  assert.deepEqual(suggestItems(names, 'ore', new Set(['iron ore'])), ['Ore chunk']);
+});
+
+test('suggestItems: empty token yields nothing; respects the cap', () => {
+  assert.deepEqual(suggestItems(['Gold'], '', new Set()), []);
+  const many = Array.from({ length: 12 }, (_, i) => `Ore ${String.fromCharCode(97 + i)}`);
+  assert.equal(suggestItems(many, 'ore', new Set(), 8).length, 8);
 });

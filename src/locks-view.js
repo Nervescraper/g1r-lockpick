@@ -96,4 +96,35 @@ export function filterLocks(locks, parsed) {
   return locks.filter((l) => matchLockContents(l, parsed));
 }
 
+// Distinct item names across all locks' contents, case-insensitively deduped while
+// keeping the first-seen display casing. The autocomplete pool.
+export function allItemNames(locks) {
+  const seen = new Set();
+  const out = [];
+  for (const l of locks) {
+    for (const c of (l && l.contents) || []) {
+      const name = String(c && c.item != null ? c.item : '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+// Suggestions for the term currently being typed: names containing `token`
+// (case-insensitive substring), excluding names already chosen in the box, sorted
+// alphabetically and capped. Empty token => no suggestions.
+export function suggestItems(names, token, alreadyChosen, limit = 8) {
+  const t = String(token ?? '').toLowerCase();
+  if (!t) return [];
+  const chosen = alreadyChosen instanceof Set ? alreadyChosen : new Set(alreadyChosen || []);
+  return names
+    .filter((n) => n.toLowerCase().includes(t) && !chosen.has(n.toLowerCase()))
+    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+    .slice(0, limit);
+}
+
 export { RECENT_LIMIT, OTHER_KEY };
