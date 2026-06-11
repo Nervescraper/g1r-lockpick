@@ -77,4 +77,23 @@ export function parseSearch(text) {
   return { include, exclude };
 }
 
+// True if a lock's chest contents satisfy a parsed query. Include terms are ANDed
+// (each must be a substring of some item); exclude terms are ORed (any match drops it).
+export function matchLockContents(lock, parsed) {
+  const items = ((lock && lock.contents) || [])
+    .map((c) => String(c && c.item != null ? c.item : '').toLowerCase())
+    .filter(Boolean);
+  for (const term of parsed.include) {
+    if (!items.some((it) => it.includes(term))) return false;
+  }
+  for (const term of parsed.exclude) {
+    if (items.some((it) => it.includes(term))) return false;
+  }
+  return true;
+}
+
+export function filterLocks(locks, parsed) {
+  return locks.filter((l) => matchLockContents(l, parsed));
+}
+
 export { RECENT_LIMIT, OTHER_KEY };

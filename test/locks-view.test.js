@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupLocks, parseSearch } from '../src/locks-view.js';
+import { groupLocks, parseSearch, matchLockContents, filterLocks } from '../src/locks-view.js';
 
 const lock = (id, location, updatedAt) => ({ id, location, updatedAt });
+const withItems = (id, ...items) => ({ id, contents: items.map((item) => ({ item, qty: 1 })) });
 
 test('groupLocks: empty input yields empty recent and folders', () => {
   const out = groupLocks([]);
@@ -87,4 +88,31 @@ test('parseSearch: empty / whitespace yields empty lists', () => {
   assert.deepEqual(parseSearch(''), { include: [], exclude: [] });
   assert.deepEqual(parseSearch('   '), { include: [], exclude: [] });
   assert.deepEqual(parseSearch(null), { include: [], exclude: [] });
+});
+
+test('matchLockContents: include requires ALL terms (substring, case-insensitive)', () => {
+  const lck = withItems('a', 'Gold nugget', 'Rusty Sword');
+  assert.equal(matchLockContents(lck, parseSearch('gold sword')), true);
+  assert.equal(matchLockContents(lck, parseSearch('gold axe')), false);
+  assert.equal(matchLockContents(lck, parseSearch('GOLD')), true);
+});
+
+test('matchLockContents: exclude drops a lock if ANY term matches', () => {
+  const lck = withItems('a', 'Gold nugget', 'Rusty Sword');
+  assert.equal(matchLockContents(lck, parseSearch('-sword')), false);
+  assert.equal(matchLockContents(lck, parseSearch('-axe')), true);
+  assert.equal(matchLockContents(lck, parseSearch('gold -sword')), false);
+});
+
+test('matchLockContents: empty contents passes exclude-only, fails any include', () => {
+  const lck = { id: 'a', contents: [] };
+  assert.equal(matchLockContents(lck, parseSearch('-gold')), true);
+  assert.equal(matchLockContents(lck, parseSearch('gold')), false);
+  assert.equal(matchLockContents(lck, parseSearch('')), true);
+});
+
+test('filterLocks: keeps matching locks in original order', () => {
+  const locks = [withItems('a', 'Gold'), withItems('b', 'Sword'), withItems('c', 'Gold', 'Sword')];
+  assert.deepEqual(filterLocks(locks, parseSearch('gold')).map((l) => l.id), ['a', 'c']);
+  assert.deepEqual(filterLocks(locks, parseSearch('-gold')).map((l) => l.id), ['b']);
 });
