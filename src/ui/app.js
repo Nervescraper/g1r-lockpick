@@ -1036,6 +1036,8 @@ function refreshSearchView() {
   if (sg) sg.innerHTML = suggestDropdownHtml();
   const clr = document.getElementById('lock-clear');
   if (clr) clr.classList.toggle('hidden', !(state.lockSearch || '').length);
+  const box = document.getElementById('lock-search');
+  if (box && box.value !== (state.lockSearch || '')) box.value = state.lockSearch || '';
 }
 
 // One saved-lock row: load (name) · share · delete, with an inline share-code panel
