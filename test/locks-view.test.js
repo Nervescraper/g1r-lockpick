@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupLocks, parseSearch, matchLockContents, filterLocks, allItemNames, suggestItems } from '../src/locks-view.js';
+import { groupLocks, parseSearch, matchLockContents, filterLocks, allItemNames, suggestItems, generalLocations, DEFAULT_LOCATIONS } from '../src/locks-view.js';
 
 const lock = (id, location, updatedAt) => ({ id, location, updatedAt });
 const withItems = (id, ...items) => ({ id, contents: items.map((item) => ({ item, qty: 1 })) });
@@ -137,4 +137,43 @@ test('suggestItems: empty token yields nothing; respects the cap', () => {
   const many = Array.from({ length: 12 }, (_, i) => `Ore ${String.fromCharCode(97 + i)}`);
   assert.equal(suggestItems(many, 'ore', new Set(), 8).length, 8);
   assert.deepEqual(suggestItems(['Ore c', 'Ore a', 'Ore b'], 'ore', new Set(), 2), ['Ore a', 'Ore b']);
+});
+
+const locAt = (location) => ({ location });
+
+test('generalLocations: no locks yields the 4 defaults, sorted A–Z', () => {
+  assert.deepEqual(generalLocations([]), ['New Camp', 'Old Camp', 'Orc Camp', 'Swamp Camp']);
+});
+
+test('generalLocations: a custom location sorts among the defaults', () => {
+  const out = generalLocations([locAt('Castle')]);
+  assert.deepEqual(out, ['Castle', 'New Camp', 'Old Camp', 'Orc Camp', 'Swamp Camp']);
+});
+
+test('generalLocations: de-dups a saved location against a default case-insensitively, default casing wins', () => {
+  const out = generalLocations([locAt('old camp')]);
+  assert.deepEqual(out, ['New Camp', 'Old Camp', 'Orc Camp', 'Swamp Camp']);
+  assert.ok(out.includes('Old Camp'));
+  assert.ok(!out.includes('old camp'));
+});
+
+test('generalLocations: de-dups two custom locations case-insensitively, first-seen casing wins', () => {
+  const out = generalLocations([locAt('Castle'), locAt('castle')]);
+  assert.equal(out.filter((l) => l.toLowerCase() === 'castle').length, 1);
+  assert.ok(out.includes('Castle'));
+});
+
+test('generalLocations: ignores empty, whitespace, and missing locations', () => {
+  const out = generalLocations([locAt(''), locAt('   '), locAt(undefined), {}]);
+  assert.deepEqual(out, ['New Camp', 'Old Camp', 'Orc Camp', 'Swamp Camp']);
+});
+
+test('generalLocations: trims surrounding whitespace on custom locations', () => {
+  const out = generalLocations([locAt('  Castle  ')]);
+  assert.ok(out.includes('Castle'));
+  assert.ok(!out.includes('  Castle  '));
+});
+
+test('generalLocations: DEFAULT_LOCATIONS holds the 4 camps in canonical casing', () => {
+  assert.deepEqual(DEFAULT_LOCATIONS, ['Old Camp', 'New Camp', 'Swamp Camp', 'Orc Camp']);
 });

@@ -9,6 +9,10 @@ const RECENT_LIMIT = 5;
 const OTHER_KEY = '__other__';
 const OTHER_LABEL = 'Other';
 
+// The built-in quick-fill locations, in display (canonical) casing. Saved locks that
+// match one of these case-insensitively reuse this casing rather than their own.
+export const DEFAULT_LOCATIONS = ['Old Camp', 'New Camp', 'Swamp Camp', 'Orc Camp'];
+
 // Comparator over the ORIGINAL array: returns a function comparing by updatedAt desc,
 // with undated locks pushed last and ties broken by original index for stability.
 function byRecency(locks) {
@@ -57,6 +61,22 @@ export function groupLocks(locks) {
     });
 
   return { recent, folders };
+}
+
+// Merge the default quick-fill locations with every distinct, non-empty location used
+// across saved locks. De-duplicated case-insensitively (a default's canonical casing
+// wins; otherwise first-seen casing wins), sorted A–Z case-insensitively. Pure: takes
+// the lock array in, returns names out — no DOM, no storage.
+export function generalLocations(locks, defaults = DEFAULT_LOCATIONS) {
+  const byKey = new Map();
+  for (const name of defaults) byKey.set(name.toLowerCase(), name);
+  for (const l of locks) {
+    const name = String(l?.location ?? '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, name);
+  }
+  return [...byKey.values()].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 }
 
 // Parse a search query into { include, exclude } term lists. Terms are split on
