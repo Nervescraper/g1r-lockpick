@@ -14,7 +14,7 @@ import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
   exportLocks, encodeShare, parseImport, classifyImport, sameIdentity, sanitizeContents,
 } from '../storage.js';
-import { groupLocks } from '../locks-view.js';
+import { groupLocks, parseSearch, filterLocks, allItemNames, suggestItems } from '../locks-view.js';
 import { shouldShowBadge } from './changelog-badge.js';
 
 const store = window.localStorage;
@@ -922,8 +922,8 @@ function sectionOpen(key) {
 
 // One collapsible section: clickable header (caret + label + count) and, when open, the
 // stack of lock rows. Reuses lockRowHtml unchanged.
-function lockSectionHtml(key, label, locks) {
-  const open = sectionOpen(key);
+function lockSectionHtml(key, label, locks, forceOpen = false) {
+  const open = forceOpen || sectionOpen(key);
   const caret = open ? '▼' : '▸';
   const body = open ? `<div class="lock-list">${locks.map(lockRowHtml).join('')}</div>` : '';
   return `<div class="lock-folder">
@@ -936,8 +936,18 @@ function lockSectionHtml(key, label, locks) {
   </div>`;
 }
 
-// The full sectioned list: Recent (when non-empty) followed by one section per folder.
+// The full sectioned list. With no active search: Recent (when non-empty) + one section
+// per folder, using persisted open/closed state. With an active search: Recent is hidden,
+// only matching locks remain, empty folders vanish, and every folder is force-opened.
 function lockSectionsHtml(locks) {
+  const parsed = parseSearch(state.lockSearch);
+  const active = parsed.include.length > 0 || parsed.exclude.length > 0;
+  if (active) {
+    const filtered = filterLocks(locks, parsed);
+    if (!filtered.length) return '<div class="muted">No locks match.</div>';
+    const { folders } = groupLocks(filtered);
+    return folders.map((f) => lockSectionHtml(f.key, f.label, f.locks, true)).join('');
+  }
   const { recent, folders } = groupLocks(locks);
   const parts = [];
   if (recent.length) parts.push(lockSectionHtml(RECENT_KEY, 'Recent', recent));
