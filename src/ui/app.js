@@ -477,7 +477,7 @@ function render() {
   footer.className = 'ap-footer';
   footer.innerHTML = `<label class="ap-kbd">
       <input type="checkbox" data-action="toggle-kbd"${kbdEnabled() ? ' checked' : ''}>
-      <span class="ap-kbd-tip" data-tip="Advance:  Enter · Space · ↓ · →&#10;Back:  ↑ · ← · Backspace&#10;Next / prev section:  N · P (collapsed view)&#10;Reset pins:  R&#10;Full plan:  Z">Keyboard shortcuts</span></label>`;
+      <span class="ap-kbd-tip" data-tip="Advance:  Enter · Space · ↓ · →&#10;Back:  ↑ · ← · Backspace&#10;Next / prev section:  N · P (collapsed view)&#10;Reset pins:  R&#10;Full plan:  Z&#10;Focus lock search:  /">Keyboard shortcuts</span></label>`;
   wrap.appendChild(footer);
 
   appEl.appendChild(wrap);
