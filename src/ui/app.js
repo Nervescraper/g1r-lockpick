@@ -886,9 +886,10 @@ function lockStep() {
   left.className = 'lock-col';
   left.innerHTML = `<div class="ap-card">
     <div class="ap-h">Load a saved lock</div>
-    ${locks.length
+    ${locks.length ? searchBarHtml() : ''}
+    <div id="lock-list-host">${locks.length
       ? lockSectionsHtml(locks)
-      : '<div class="muted">No saved locks yet — start a new one on the right →</div>'}
+      : '<div class="muted">No saved locks yet — start a new one on the right →</div>'}</div>
     <div class="lock-io">
       ${allLocks.length ? '<span class="ap-btn" data-action="export-all">⬆ Export all</span>' : ''}
       <span class="ap-btn" data-action="import-open">⬇ Import</span>
@@ -953,6 +954,82 @@ function lockSectionsHtml(locks) {
   if (recent.length) parts.push(lockSectionHtml(RECENT_KEY, 'Recent', recent));
   for (const f of folders) parts.push(lockSectionHtml(f.key, f.label, f.locks));
   return parts.join('');
+}
+
+// ---------- contents search box + item-name autocomplete ----------
+
+// The locks offered in the Load list (everything except the current session lock).
+function currentLockList() {
+  return loadLocks(store).filter((l) => l.id !== state.lockId);
+}
+
+// The trailing run of non-space chars: the term the user is currently typing
+// (includes a leading "-" if present). Empty when the field ends in a space.
+function currentToken(text) {
+  const m = String(text ?? '').match(/(\S*)$/);
+  return m ? m[1] : '';
+}
+
+// Lowercased remainders of every term EXCEPT the one being typed — so a name already
+// in the box isn't suggested again.
+function chosenTermSet() {
+  const text = state.lockSearch || '';
+  const endsSpace = /\s$/.test(text);
+  const all = text.split(/\s+/).filter(Boolean);
+  const committed = endsSpace ? all : all.slice(0, -1);
+  return new Set(committed.map((t) => (t[0] === '-' ? t.slice(1) : t).toLowerCase()).filter(Boolean));
+}
+
+// Suggestions for the current token, or [] when the dropdown is closed / token empty.
+function currentSuggestions() {
+  if (state.suggestOpen === false) return [];
+  const tok = currentToken(state.lockSearch);
+  const term = tok[0] === '-' ? tok.slice(1) : tok;
+  if (!term) return [];
+  return suggestItems(allItemNames(currentLockList()), term, chosenTermSet());
+}
+
+// Replace the current token with the chosen name (preserving a leading "-") and append a
+// space so the next term can be typed.
+function applySuggestion(value) {
+  const text = state.lockSearch || '';
+  const tok = currentToken(text);
+  const dash = tok[0] === '-' ? '-' : '';
+  const head = text.slice(0, text.length - tok.length);
+  state.lockSearch = head + dash + value + ' ';
+  state.searchSel = -1;
+}
+
+function suggestDropdownHtml() {
+  const sugg = currentSuggestions();
+  if (!sugg.length) return '';
+  return sugg
+    .map((name, i) =>
+      `<div class="ls-opt${i === state.searchSel ? ' sel' : ''}" data-action="pick-suggest" data-value="${escapeHtml(name)}">${escapeHtml(name)}</div>`
+    )
+    .join('');
+}
+
+function searchBarHtml() {
+  const q = state.lockSearch || '';
+  return `<div class="lock-search">
+    <input id="lock-search" class="ls-input" type="text" autocomplete="off"
+      placeholder="Search contents…  e.g. gold -sword" data-action="search-input"
+      value="${escapeHtml(q)}" />
+    <span id="lock-clear" class="ls-clear${q ? '' : ' hidden'}" data-action="clear-search" title="Clear search">✕</span>
+    <div id="lock-suggest" class="ls-suggest">${suggestDropdownHtml()}</div>
+  </div>`;
+}
+
+// Surgical re-render used while typing — never calls render(), so the input keeps focus
+// and caret. Updates the filtered list, the dropdown, and the clear button's visibility.
+function refreshSearchView() {
+  const host = document.getElementById('lock-list-host');
+  if (host) host.innerHTML = lockSectionsHtml(currentLockList());
+  const sg = document.getElementById('lock-suggest');
+  if (sg) sg.innerHTML = suggestDropdownHtml();
+  const clr = document.getElementById('lock-clear');
+  if (clr) clr.classList.toggle('hidden', !(state.lockSearch || '').length);
 }
 
 // One saved-lock row: load (name) · share · delete, with an inline share-code panel
@@ -2406,6 +2483,7 @@ appEl.addEventListener('click', (e) => {
     case 'import-cancel':
     case 'import-done': state.stage = 'lock'; state.import = undefined; break;
     case 'cf-choice': state.import.choices[+t.dataset.i] = t.dataset.choice; break;
+    case 'search-input': return; // clicking the search box must not trigger a full re-render
     case 'open-changelog': openChangelog(); return; // overlay lives outside the app state/render cycle
     case 'open-fullplan': openPlanModal(); return; // overlay lives outside the app state/render cycle
     default: return;
@@ -2414,6 +2492,14 @@ appEl.addEventListener('click', (e) => {
 });
 
 appEl.addEventListener('input', (e) => {
+  // Contents search box: filter + autocomplete in place, never re-rendering (keeps focus).
+  if (e.target.id === 'lock-search') {
+    state.lockSearch = e.target.value;
+    state.searchSel = -1;
+    state.suggestOpen = true;
+    refreshSearchView();
+    return;
+  }
   // Import paste box: keep the typed text without re-rendering (keeps focus); a new
   // paste also clears any stale file selection and error so Review uses what's visible.
   if (e.target.closest('[data-action="import-text"]') && state.import) {
@@ -2445,6 +2531,60 @@ appEl.addEventListener('input', (e) => {
   refreshLiveShare();
   const w = document.getElementById('name-warning');
   if (w) w.innerHTML = nameWarningHtml();
+});
+
+// pick-suggest / clear-search run on mousedown with preventDefault so the search box
+// never loses focus (which would close the dropdown before a click could land).
+appEl.addEventListener('mousedown', (e) => {
+  const t = e.target.closest('[data-action="pick-suggest"], [data-action="clear-search"]');
+  if (!t) return;
+  e.preventDefault();
+  if (t.dataset.action === 'pick-suggest') applySuggestion(t.dataset.value);
+  else { state.lockSearch = ''; state.searchSel = -1; }
+  state.suggestOpen = true;
+  refreshSearchView();
+  const box = document.getElementById('lock-search');
+  if (box) box.focus();
+});
+
+// Keyboard within the search box: arrows move the highlight, Enter accepts it, Esc closes
+// the dropdown. (The global solve/setup shortcuts already bail on INPUT targets.)
+appEl.addEventListener('keydown', (e) => {
+  if (e.target.id !== 'lock-search') return;
+  if (typeof state.searchSel !== 'number') state.searchSel = -1;
+  const sugg = currentSuggestions();
+  if (e.key === 'ArrowDown' && sugg.length) {
+    e.preventDefault();
+    state.searchSel = (state.searchSel + 1) % sugg.length;
+    const sg = document.getElementById('lock-suggest');
+    if (sg) sg.innerHTML = suggestDropdownHtml();
+  } else if (e.key === 'ArrowUp' && sugg.length) {
+    e.preventDefault();
+    state.searchSel = (state.searchSel - 1 + sugg.length) % sugg.length;
+    const sg = document.getElementById('lock-suggest');
+    if (sg) sg.innerHTML = suggestDropdownHtml();
+  } else if (e.key === 'Enter') {
+    if (state.searchSel >= 0 && state.searchSel < sugg.length) {
+      e.preventDefault();
+      applySuggestion(sugg[state.searchSel]);
+      state.suggestOpen = true;
+      refreshSearchView();
+    }
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    state.suggestOpen = false;
+    state.searchSel = -1;
+    const sg = document.getElementById('lock-suggest');
+    if (sg) sg.innerHTML = '';
+  }
+});
+
+// Closing the dropdown when the search box loses focus (e.g. tabbing away).
+appEl.addEventListener('focusout', (e) => {
+  if (e.target.id !== 'lock-search') return;
+  state.suggestOpen = false;
+  const sg = document.getElementById('lock-suggest');
+  if (sg) sg.innerHTML = '';
 });
 
 window.addEventListener('keydown', (e) => {
