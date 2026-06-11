@@ -14,7 +14,7 @@ import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
   exportLocks, encodeShare, parseImport, classifyImport, sameIdentity, sanitizeContents,
 } from '../storage.js';
-import { groupLocks, parseSearch, filterLocks, allItemNames, suggestItems } from '../locks-view.js';
+import { groupLocks, parseSearch, filterLocks, allItemNames, suggestItems, generalLocations } from '../locks-view.js';
 import { shouldShowBadge } from './changelog-badge.js';
 
 const store = window.localStorage;
@@ -766,8 +766,8 @@ function namingWidgetHtml() {
   return `
     <div class="muted" style="margin-bottom:4px">General location</div>
     <div class="fill-row">
-      ${['Old Camp', 'New Camp', 'Swamp Camp', 'Orc Camp']
-        .map((loc) => `<button class="ap-btn loc-fill${nm.location === loc ? ' primary' : ''}" data-action="loc-fill" data-loc="${loc}">${loc}</button>`)
+      ${generalLocations(loadLocks(store))
+        .map((loc) => `<button class="ap-btn loc-fill${nm.location === loc ? ' primary' : ''}" data-action="loc-fill" data-loc="${escapeHtml(loc)}">${escapeHtml(loc)}</button>`)
         .join('')}
     </div>
     <input class="lock-name-input" type="text" data-action="loc-input" placeholder="General location…" value="${escapeHtml(nm.location || '')}" />
