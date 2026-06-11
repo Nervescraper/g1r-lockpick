@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupLocks } from '../src/locks-view.js';
+import { groupLocks, parseSearch } from '../src/locks-view.js';
 
 const lock = (id, location, updatedAt) => ({ id, location, updatedAt });
 
@@ -69,4 +69,22 @@ test('groupLocks: a literal "Other" location merges into the blank-location buck
   assert.equal(out.folders[0].key, '__other__');
   assert.equal(out.folders[0].label, 'Other');
   assert.deepEqual(out.folders[0].locks.map((l) => l.id), ['a', 'b']);
+});
+
+test('parseSearch: plain terms are includes, lowercased', () => {
+  assert.deepEqual(parseSearch('Gold Sword'), { include: ['gold', 'sword'], exclude: [] });
+});
+
+test('parseSearch: leading dash makes a term exclude', () => {
+  assert.deepEqual(parseSearch('gold -sword'), { include: ['gold'], exclude: ['sword'] });
+});
+
+test('parseSearch: bare dash and extra whitespace are ignored', () => {
+  assert.deepEqual(parseSearch('  -  gold   -ore '), { include: ['gold'], exclude: ['ore'] });
+});
+
+test('parseSearch: empty / whitespace yields empty lists', () => {
+  assert.deepEqual(parseSearch(''), { include: [], exclude: [] });
+  assert.deepEqual(parseSearch('   '), { include: [], exclude: [] });
+  assert.deepEqual(parseSearch(null), { include: [], exclude: [] });
 });

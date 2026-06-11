@@ -59,4 +59,22 @@ export function groupLocks(locks) {
   return { recent, folders };
 }
 
+// Parse a search query into { include, exclude } term lists. Terms are split on
+// whitespace and lowercased; a leading "-" marks an exclude term (a bare "-" is
+// ignored). Pure and DOM-free, like groupLocks.
+export function parseSearch(text) {
+  const include = [];
+  const exclude = [];
+  for (const tok of String(text ?? '').toLowerCase().split(/\s+/)) {
+    if (!tok) continue;
+    if (tok[0] === '-') {
+      const term = tok.slice(1);
+      if (term) exclude.push(term);
+    } else {
+      include.push(tok);
+    }
+  }
+  return { include, exclude };
+}
+
 export { RECENT_LIMIT, OTHER_KEY };
