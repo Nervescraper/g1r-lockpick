@@ -484,6 +484,33 @@ function openChangelog() {
   if (close) close.focus();
 }
 
+// Full-size photo overlay. Lives outside the render cycle (like the changelog modal). The
+// full image URL comes from the photo cache; ensure it's loaded first.
+function openLightbox(lockId, slot) {
+  const show = () => {
+    const url = (photoCache.get(lockId)?.full || [])[slot];
+    if (!url) return;
+    closeLightbox();
+    const ov = document.createElement('div');
+    ov.className = 'photo-lightbox';
+    ov.id = 'photo-lightbox';
+    ov.innerHTML = `<img src="${url}" alt="Lock photo" />`;
+    ov.addEventListener('click', closeLightbox);
+    document.body.appendChild(ov);
+  };
+  const e = photoEntry(lockId);
+  if (e.loaded) show();
+  else ensurePhotosLoaded(lockId, slot + 1), setTimeout(show, 150); // load then show
+}
+
+function closeLightbox() {
+  document.getElementById('photo-lightbox')?.remove();
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeLightbox();
+});
+
 // ---------- render ----------
 
 function render() {
@@ -2592,6 +2619,7 @@ appEl.addEventListener('click', (e) => {
     case 'content-add': { const arr = activeContents(); arr.push({ item: '', qty: 1 }); state.focusContentItem = arr.length - 1; persistContents(); break; }
     case 'content-del': activeContents().splice(+t.dataset.i, 1); persistContents(); break;
     case 'photo-del': removePhoto(t.dataset.id, +t.dataset.slot); return; // async re-renders
+    case 'photo-open': openLightbox(t.dataset.id, +t.dataset.slot); return;
     case 'edit-contents': {
       const lock = getLock(store, t.dataset.id);
       if (lock) {
