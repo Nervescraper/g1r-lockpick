@@ -218,7 +218,11 @@ export function sameIdentity(a, b) {
 // every lock as a "conflict" whenever the saved record's timestamp drifts from the file's
 // (or the file predates the field), even though every visible field is unchanged.
 function sameContent(a, b) {
-  const content = ({ updatedAt, ...rest }) => rest;
+  // Strip `photos` too: an incoming with-photos export carries the data-URL array, but the
+  // stored record only keeps `photoCount` (photos live in IndexedDB). Comparing the bytes
+  // would flag every re-imported with-photos lock as a phantom conflict. `photoCount` stays
+  // in the comparison, so a genuine change in how many photos a lock has still counts.
+  const content = ({ updatedAt, photos, ...rest }) => rest;
   return JSON.stringify(content(a)) === JSON.stringify(content(b));
 }
 

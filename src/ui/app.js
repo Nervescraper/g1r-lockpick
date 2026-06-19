@@ -1376,7 +1376,12 @@ function runImportParse() {
   const existing = loadLocks(store);
   const { fresh, identical, conflicts } = classifyImport(parsed.locks, existing);
   let newCount = 0;
-  for (const l of fresh) { saveLock(store, preserve(l)); newCount++; }
+  for (const l of fresh) {
+    const { record, photos } = splitPhotos(l);
+    saveLock(store, preserve(record));
+    if (photos.length) { importForLock(record.id, photos).then(() => { invalidatePhotos(record.id); render(); }); }
+    newCount++;
+  }
   state.import = {
     phase: 'results',
     newCount,
@@ -1395,7 +1400,10 @@ function runImportApply() {
   let added = 0;
   imp.conflicts.forEach((c, i) => {
     if (imp.choices[i] === 'copy') {
-      saveLock(store, preserve({ ...c.incoming, id: `lock-${Date.now()}-${i}` }));
+      const { record, photos } = splitPhotos(c.incoming);
+      const id = `lock-${Date.now()}-${i}`;
+      saveLock(store, preserve({ ...record, id }));
+      if (photos.length) importForLock(id, photos).then(() => { invalidatePhotos(id); render(); });
       added++;
     }
   });
@@ -2665,6 +2673,8 @@ appEl.addEventListener('click', (e) => {
       const lock = getLock(store, id);
       if (!window.confirm(`Delete ${lock ? `"${lock.name}"` : 'this lock'}? This can't be undone.`)) break;
       deleteLock(store, id);
+      deleteAllForLock(id); // async fire-and-forget; the record is already gone
+      invalidatePhotos(id);
       if (state.shareId === id) state.shareId = undefined;
       if (state.lockId === id) { state.lockId = undefined; state.location = ''; state.kind = 'Chest'; state.description = ''; state.contents = []; state.photoCount = 0; }
       break;

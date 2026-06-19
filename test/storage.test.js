@@ -188,6 +188,25 @@ test('classifyImport: same id, real content differs → still conflict even if u
   assert.equal(identical.length, 0);
 });
 
+// A with-photos export carries the photo data URLs, but the stored record keeps only
+// photoCount (photos live in IndexedDB). Re-importing such a file must NOT flag a phantom
+// conflict: same photoCount + same other fields = identical, regardless of the photos bytes.
+test('classifyImport: re-import of a with-photos export → identical, not conflict', () => {
+  const existing = [fullLock('a', { photoCount: 1, updatedAt: 1780000000000 })];
+  const inc = [fullLock('a', { photoCount: 1, photos: ['data:image/jpeg;base64,AAAA'], updatedAt: 1780000099999 })];
+  const { identical, conflicts } = classifyImport(inc, existing);
+  assert.equal(identical.length, 1);
+  assert.equal(conflicts.length, 0);
+});
+
+test('classifyImport: same id but different photoCount → conflict', () => {
+  const existing = [fullLock('a', { photoCount: 1 })];
+  const inc = [fullLock('a', { photoCount: 2, photos: ['data:image/jpeg;base64,AAAA', 'data:image/jpeg;base64,BBBB'] })];
+  const { identical, conflicts } = classifyImport(inc, existing);
+  assert.equal(conflicts.length, 1);
+  assert.equal(identical.length, 0);
+});
+
 test('sameIdentity matches on trimmed/lowercased location+type+description', () => {
   const a = { location: 'Old Camp', kind: 'Door', description: 'Behind Throne' };
   const b = { location: ' old camp ', kind: 'Door', description: 'behind throne' };
