@@ -391,8 +391,38 @@ function ensurePhotosLoaded(lockId, count) {
   })();
 }
 
+// Slot-0 thumbnails for the saved-lock list, cached by lockId so the per-event re-render
+// (which wipes innerHTML) doesn't re-read IndexedDB every time.
+const listThumbCache = new Map(); // lockId -> objectURL
+
+// After each render, fill any list-thumb <img> that lacks a src, from cache or IndexedDB.
+function hydrateListThumbs() {
+  for (const img of appEl.querySelectorAll('img.lock-row-thumb:not([src])')) {
+    const id = img.dataset.id;
+    const cached = listThumbCache.get(id);
+    if (cached) { img.src = cached; continue; }
+    getThumbURL(id, 0).then((url) => {
+      if (!url) return;
+      // A concurrent render may have already cached this lock's thumb while we awaited —
+      // don't clobber (and leak) the first URL; revoke ours and reuse the cached one.
+      if (listThumbCache.has(id)) {
+        URL.revokeObjectURL(url);
+        const live0 = appEl.querySelector(`img.lock-row-thumb[data-id="${id}"]:not([src])`);
+        if (live0) live0.src = listThumbCache.get(id);
+        return;
+      }
+      listThumbCache.set(id, url);
+      // The node may have been replaced by a later render — re-query before assigning.
+      const live = appEl.querySelector(`img.lock-row-thumb[data-id="${id}"]:not([src])`);
+      if (live) live.src = url;
+    });
+  }
+}
+
 // Revoke and forget a lock's cached URLs so the next render reloads from IndexedDB.
 function invalidatePhotos(lockId) {
+  const tu = listThumbCache.get(lockId);
+  if (tu) { URL.revokeObjectURL(tu); listThumbCache.delete(lockId); }
   const e = photoCache.get(lockId);
   if (!e) return;
   for (const u of [...e.thumbs, ...e.full]) if (u) URL.revokeObjectURL(u);
@@ -594,6 +624,7 @@ function render() {
   positionCycleCounts();
   fitPlanList();
   scrollCurrentStepIntoView();
+  hydrateListThumbs();
   // One-shot: focus the item textbox of a freshly added contents row.
   if (state.focusContentItem != null) {
     const el = appEl.querySelector(`[data-action="content-item"][data-i="${state.focusContentItem}"]`);
@@ -1202,7 +1233,9 @@ function lockRowHtml(l) {
   const summary = contentsSummary(l);
   return `<div class="lock-row">
     <div class="lock-item">
-      <span data-action="load-lock" data-id="${l.id}" style="cursor:pointer">${escapeHtml(l.name)} <span class="muted">(${l.n} plates)</span></span>
+      <span data-action="load-lock" data-id="${l.id}" style="cursor:pointer">${
+        l.photoCount > 0 ? `<img class="lock-row-thumb" data-id="${l.id}" alt="" />` : ''
+      }${escapeHtml(l.name)} <span class="muted">(${l.n} plates)</span></span>
       <span class="lock-acts">
         <span class="io" data-action="edit-contents" data-id="${l.id}" title="Edit contents">✎</span>
         <span class="io" data-action="share-lock" data-id="${l.id}" title="Share this lock">⇪</span>
