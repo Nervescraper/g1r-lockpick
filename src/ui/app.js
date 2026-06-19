@@ -399,6 +399,43 @@ function invalidatePhotos(lockId) {
   photoCache.delete(lockId);
 }
 
+// Update photoCount on the right holder: the session lock (state) when it's the session lock,
+// and always the saved record. Keeps state.photoCount in sync when editing the loaded lock.
+function setPhotoCount(lockId, count) {
+  const base = getLock(store, lockId);
+  if (base) saveLock(store, stamp({ ...base, photoCount: count }));
+  if (state.lockId === lockId) state.photoCount = count;
+}
+
+// The next free slot for a lock equals its current photoCount (slots fill 0 then 1).
+function nextPhotoSlot(lockId) {
+  const base = getLock(store, lockId);
+  return base ? (base.photoCount || 0) : 0;
+}
+
+async function addPhoto(lockId, fileOrBlob) {
+  const slot = nextPhotoSlot(lockId);
+  if (slot >= 2) return; // already full
+  try {
+    await putPhoto(lockId, slot, fileOrBlob);
+  } catch {
+    return; // not a decodable image — silently ignore
+  }
+  setPhotoCount(lockId, slot + 1);
+  invalidatePhotos(lockId);
+  render();
+}
+
+async function removePhoto(lockId, slot) {
+  const base = getLock(store, lockId);
+  const count = base ? (base.photoCount || 0) : 0;
+  await deletePhoto(lockId, slot);
+  await compact(lockId, count);
+  setPhotoCount(lockId, Math.max(0, count - 1));
+  invalidatePhotos(lockId);
+  render();
+}
+
 // ---------- changelog modal ----------
 // A self-contained overlay on document.body, independent of the app's render cycle
 // and state. Dismissable by Esc, a backdrop click, or the close button — every path
@@ -2554,6 +2591,7 @@ appEl.addEventListener('click', (e) => {
     case 'copy-share': copyShareCode(t); return;
     case 'content-add': { const arr = activeContents(); arr.push({ item: '', qty: 1 }); state.focusContentItem = arr.length - 1; persistContents(); break; }
     case 'content-del': activeContents().splice(+t.dataset.i, 1); persistContents(); break;
+    case 'photo-del': removePhoto(t.dataset.id, +t.dataset.slot); return; // async re-renders
     case 'edit-contents': {
       const lock = getLock(store, t.dataset.id);
       if (lock) {
@@ -2783,8 +2821,38 @@ window.addEventListener('paste', (e) => {
   render();
 });
 
+// Paste an image onto the success screen or the lock editor → next free photo slot. Separate
+// from the import-code paste above (that one only fires on the Lock step and ignores images).
+window.addEventListener('paste', (e) => {
+  const lockId = activePhotoLockId();
+  if (!lockId) return;
+  const items = e.clipboardData?.items || [];
+  for (const it of items) {
+    if (it.kind === 'file' && it.type.startsWith('image/')) {
+      const file = it.getAsFile();
+      if (file) { e.preventDefault(); addPhoto(lockId, file); return; }
+    }
+  }
+});
+
+// The lock id that photo paste targets, or null when no photo surface is active. The success
+// screen edits the session lock (state.lockId, only once named); the editor edits ed.id.
+function activePhotoLockId() {
+  if (state.stage === 'contents' && state.contentsEdit) return state.contentsEdit.id;
+  const onSuccess = state.stage === 'solve' && Array.isArray(state.plan) && state.planIndex >= state.plan.length;
+  if (onSuccess && state.lockId) return state.lockId;
+  return null;
+}
+
 // Read a chosen backup file into the import state, then re-render to show its name.
 appEl.addEventListener('change', (e) => {
+  const pf = e.target.closest('[data-action="photo-file"]');
+  if (pf) {
+    const file = e.target.files && e.target.files[0];
+    if (file) addPhoto(pf.dataset.id, file); // async; re-renders on completion
+    e.target.value = ''; // allow re-choosing the same file later
+    return;
+  }
   if (!e.target.closest('[data-action="import-file"]') || !state.import) return;
   const file = e.target.files && e.target.files[0];
   if (!file) return;
