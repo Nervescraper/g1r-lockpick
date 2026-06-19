@@ -893,6 +893,42 @@ function contentsEditorHtml(items) {
   return `<div class="contents-editor">${rows}<button class="ap-btn ct-add" data-action="content-add">＋ Add item</button></div>`;
 }
 
+// The 2-slot photo picker, shared by the "Lock open!" screen and the saved-lock editor.
+// `lockId` is the record the photos attach to (null on an unnamed success-screen lock, which
+// disables the controls). `count` is the record's photoCount. Reads object URLs from the cache.
+function photosEditorHtml(lockId, count) {
+  if (!lockId) {
+    return `<div class="photos-editor disabled"><div class="muted">Name the lock to add photos.</div></div>`;
+  }
+  ensurePhotosLoaded(lockId, count);
+  const e = photoEntry(lockId);
+  const slots = [0, 1].map((s) => {
+    if (s < count) {
+      const url = e.thumbs[s];
+      const img = url
+        ? `<img class="photo-thumb" src="${url}" alt="Lock photo ${s + 1}" data-action="photo-open" data-id="${lockId}" data-slot="${s}" />`
+        : `<div class="photo-thumb loading"></div>`;
+      return `<div class="photo-slot filled">${img}
+        <button class="photo-del" data-action="photo-del" data-id="${lockId}" data-slot="${s}" title="Remove photo" aria-label="Remove photo">✕</button>
+      </div>`;
+    }
+    if (s === count) {
+      // The single "add" slot: a file picker, plus a hint that ⌘/Ctrl+V pastes a screenshot.
+      // The paste itself is handled by the window 'paste' listener (a real paste event needs
+      // no clipboard permission) — so there's no Paste button to trip the browser's clipboard
+      // dialog. The hint is keyboard-only, so it's hidden on touch (narrow) viewports.
+      return `<div class="photo-slot empty">
+        <label class="photo-add" title="Choose an image file">＋ Add photo
+          <input type="file" accept="image/*" data-action="photo-file" data-id="${lockId}" data-slot="${s}" hidden />
+        </label>
+        ${isNarrowViewport() ? '' : '<span class="photo-paste-hint muted">or paste with ⌘/Ctrl+V</span>'}
+      </div>`;
+    }
+    return ''; // beyond the add slot — nothing
+  }).join('');
+  return `<div class="photos-editor">${slots}</div>`;
+}
+
 // A compact "2× Gold · 1× Sword" line for a saved lock; '' when it has no recorded loot.
 function contentsSummary(l) {
   const items = (Array.isArray(l.contents) ? l.contents : []).filter((c) => c && String(c.item || '').trim());
