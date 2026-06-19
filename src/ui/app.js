@@ -30,10 +30,16 @@ const DIR_WORD = { L: 'Left', R: 'Right' };
 // Bump when a changelog update should re-show the "New" badge on the Changelog
 // button. Leave unchanged for silent edits (typos, rewording) that shouldn't
 // re-notify users who've already seen the latest entries.
-const CHANGELOG_VERSION = '1.4.0';
+const CHANGELOG_VERSION = '1.5.0';
 
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
+  {
+    date: '2026-06-19',
+    items: [
+      'Save up to 2 photos per lock from the “Lock open!” screen — paste or choose an image. Photos stay on this device and out of share codes; back them up with “Export all + photos” or a lock’s ⬇ button.',
+    ],
+  },
   {
     date: '2026-06-10',
     items: [
