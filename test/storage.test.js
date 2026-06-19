@@ -13,6 +13,7 @@ import {
   classifyImport,
   sameIdentity,
   sanitizeContents,
+  sanitizePhotos,
 } from '../src/storage.js';
 
 // minimal localStorage-compatible store for tests
@@ -286,4 +287,25 @@ test('parseImport: rejects a lock whose updatedAt is not a number', () => {
   const out = parseImport(JSON.stringify(env));
   assert.equal(out.locks.length, 0);
   assert.equal(out.invalidCount, 1);
+});
+
+test('sanitizePhotos keeps image data URLs and caps at 2', () => {
+  const a = 'data:image/jpeg;base64,AAAA';
+  const b = 'data:image/png;base64,BBBB';
+  const c = 'data:image/jpeg;base64,CCCC';
+  assert.deepEqual(sanitizePhotos([a, b, c]), [a, b]);
+});
+
+test('sanitizePhotos drops non-string and non-image entries', () => {
+  assert.deepEqual(
+    sanitizePhotos(['data:image/jpeg;base64,AAAA', 'http://x/y.png', 42, null, '']),
+    ['data:image/jpeg;base64,AAAA'],
+  );
+});
+
+test('sanitizePhotos returns [] for non-array input', () => {
+  assert.deepEqual(sanitizePhotos(undefined), []);
+  assert.deepEqual(sanitizePhotos(null), []);
+  assert.deepEqual(sanitizePhotos('nope'), []);
+  assert.deepEqual(sanitizePhotos({}), []);
 });

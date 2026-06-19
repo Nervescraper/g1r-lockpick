@@ -124,6 +124,20 @@ export function sanitizeContents(contents) {
   return out;
 }
 
+// Normalize an untrusted photos value to at most 2 image data-URL strings. Mirrors
+// sanitizeContents: non-array input yields []. Keeps only strings that look like an
+// image data URL (the only thing photos.js ever writes), so a hostile/old export can't
+// smuggle other URLs into IndexedDB on import.
+export function sanitizePhotos(photos) {
+  if (!Array.isArray(photos)) return [];
+  const out = [];
+  for (const p of photos) {
+    if (typeof p === 'string' && p.startsWith('data:image/')) out.push(p);
+    if (out.length === 2) break;
+  }
+  return out;
+}
+
 function readEnvelope(text) {
   if (typeof text !== 'string' || !text.trim()) return null;
   const tryParse = (s) => {
