@@ -113,20 +113,29 @@ Used on **both** the "Lock open!" screen and the ✎ Edit-lock editor (`contents
 
 ## Export / import / delete
 
-- `exportAllLocks()` and per-lock export become **async**: for each lock, `listForExport()`
-  reads its photos; the `storage.js` helper attaches them as `photos` to a record copy; then
-  serialize. **Note:** a full backup of 160 locks × 2 photos is ~110 MB JSON — large but a
-  deliberate download. Add a one-line size heads-up near the Export-all control.
-- `parseImport()` stays synchronous for validation; the import **commit** step becomes async:
-  after writing each record to localStorage (`photos` stripped, `photoCount` set), call
-  `importForLock()` to write the blobs into IndexedDB.
-- Every `deleteLock()` call site also calls `deleteAllForLock()` so photos do not leak.
+The serialization is one shared async helper — `buildExportJSON(locks, { withPhotos })` —
+that, when `withPhotos`, reads each lock's photos via `listForExport()` and the `storage.js`
+helper attaches them as `photos` to a record copy before serializing. When `withPhotos` is
+false it emits the current photo-free JSON unchanged.
+
+- **Bulk "Export all" → two choices.** The control offers **"Export all"** (photo-free,
+  current behavior/size) and **"Export all + photos"** (full backup; 160 locks × 2 photos
+  ≈ ~110 MB). The with-photos choice carries a one-line size heads-up.
+- **Single-lock "Export with photos" → file download.** A new per-lock action next to the
+  ⇪ Share action downloads a JSON file with that one lock plus its photos (~500 KB for 2).
+  The ⇪ **share code stays photo-free pasteable text, unchanged** (golden rule). This is the
+  primary way to back up an individual lock's photos.
+- **Import.** `parseImport()` stays synchronous for validation; the import **commit** step
+  becomes async: after writing each record to localStorage (`photos` stripped, `photoCount`
+  set), call `importForLock()` to write the blobs into IndexedDB. A file from any of the three
+  export paths above imports identically — photo-free files simply set `photoCount = 0`.
+- **Delete.** Every `deleteLock()` call site also calls `deleteAllForLock()` so photos do not leak.
 
 ## Testing
 
-- **Unit (`node --test`):** the pure split/merge transforms in `storage.js` — export attaches
-  `photos`; import strips `photos`, sets `photoCount`, and drops malformed entries (mirrors the
-  existing `sanitizeContents` tests).
+- **Unit (`node --test`):** the pure split/merge transforms in `storage.js` — `withPhotos`
+  export attaches `photos` while photo-free export omits it; import strips `photos`, sets
+  `photoCount`, and drops malformed entries (mirrors the existing `sanitizeContents` tests).
 - **e2e (existing `e2e/` Playwright):** solve a lock, attach an image (paste and/or choose
   file), reload, confirm the thumbnail persists and the lightbox opens; confirm a share code
   contains no photo bytes.
@@ -135,7 +144,7 @@ Used on **both** the "Lock open!" screen and the ✎ Edit-lock editor (`contents
 
 - **In scope:** up to 2 photos per lock; paste + choose-file input; IndexedDB storage with
   downscale+JPEG; picker on the success screen and the edit editor; click-to-enlarge lightbox;
-  list thumbnail; export carries photos; import restores them; share codes exclude them;
-  delete cleans up.
+  list thumbnail; "Export all" (photo-free) **and** "Export all + photos"; a per-lock "export
+  with photos" file download; import restores photos; share codes exclude them; delete cleans up.
 - **Out of scope (YAGNI):** drag-&-drop, more than 2 photos, captions, cropping/rotation,
   cloud sync, embedding photos in share codes.
