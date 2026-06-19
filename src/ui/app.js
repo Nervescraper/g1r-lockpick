@@ -1074,7 +1074,8 @@ function lockStep() {
       ? lockSectionsHtml(locks)
       : '<div class="muted">No saved locks yet — start a new one on the right →</div>'}</div>
     <div class="lock-io">
-      ${allLocks.length ? '<span class="ap-btn" data-action="export-all">⬆ Export all</span>' : ''}
+      ${allLocks.length ? `<span class="ap-btn" data-action="export-all">⬆ Export all</span>
+        ${allLocks.some((l) => l.photoCount > 0) ? `<span class="ap-btn" data-action="export-all-photos" title="Larger file — includes all photos">⬆ Export all + photos</span>` : ''}` : ''}
       <span class="ap-btn" data-action="import-open">⬇ Import</span>
     </div>
   </div>`;
@@ -1239,6 +1240,7 @@ function lockRowHtml(l) {
       <span class="lock-acts">
         <span class="io" data-action="edit-contents" data-id="${l.id}" title="Edit contents">✎</span>
         <span class="io" data-action="share-lock" data-id="${l.id}" title="Share this lock">⇪</span>
+        ${l.photoCount > 0 ? `<span class="io" data-action="export-lock-photos" data-id="${l.id}" title="Download this lock with its photos">⬇</span>` : ''}
         <span class="x" data-action="del-lock" data-id="${l.id}">✕</span>
       </span>
     </div>
@@ -1419,18 +1421,40 @@ function copyShareCode(btn) {
 }
 
 // Trigger a download of all saved locks as a JSON backup file.
-function exportAllLocks() {
-  const locks = loadLocks(store);
-  if (!locks.length) return;
-  const blob = new Blob([exportLocks(locks, isoNow())], { type: 'application/json' });
+// Shape the export envelope. With photos, attach each lock's IndexedDB photos as data URLs.
+async function buildExportJSON(locks, { withPhotos }) {
+  if (!withPhotos) return exportLocks(locks, isoNow());
+  const withImgs = [];
+  for (const l of locks) withImgs.push(attachPhotos(l, await listForExport(l.id)));
+  return exportLocks(withImgs, isoNow());
+}
+
+function downloadJSON(filename, text) {
+  const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `g1r-locks-${isoNow().slice(0, 10)}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+async function exportAllLocks(withPhotos) {
+  const locks = loadLocks(store);
+  if (!locks.length) return;
+  const json = await buildExportJSON(locks, { withPhotos });
+  downloadJSON(`g1r-locks-${isoNow().slice(0, 10)}.json`, json);
+}
+
+// One lock + its photos, as a file download (the share code stays photo-free text).
+async function exportLockWithPhotos(id) {
+  const lock = getLock(store, id);
+  if (!lock) return;
+  const json = await buildExportJSON([lock], { withPhotos: true });
+  const slug = (lock.name || 'lock').replace(/[^\w-]+/g, '-').slice(0, 40);
+  downloadJSON(`g1r-lock-${slug}.json`, json);
 }
 
 function setupPanel() {
@@ -2645,7 +2669,9 @@ appEl.addEventListener('click', (e) => {
       if (state.lockId === id) { state.lockId = undefined; state.location = ''; state.kind = 'Chest'; state.description = ''; state.contents = []; state.photoCount = 0; }
       break;
     }
-    case 'export-all': exportAllLocks(); return; // download only — no re-render needed
+    case 'export-all': exportAllLocks(false); return;
+    case 'export-all-photos': exportAllLocks(true); return;
+    case 'export-lock-photos': exportLockWithPhotos(t.dataset.id); return;
     case 'share-lock': state.shareId = state.shareId === t.dataset.id ? undefined : t.dataset.id; break;
     case 'close-share': state.shareId = undefined; break;
     case 'copy-share': copyShareCode(t); return;
