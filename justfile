@@ -19,4 +19,5 @@ e2e:
     node e2e/preflight.js
     node e2e/strategy-sim.js
     node e2e/run.js
+    node e2e/photos.js
     node e2e/explore.js
