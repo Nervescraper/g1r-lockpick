@@ -13,7 +13,12 @@ import { createMapping, recommendNext, allMapped, defer } from '../discovery.js'
 import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
   exportLocks, encodeShare, parseImport, classifyImport, sameIdentity, sanitizeContents,
+  splitPhotos, attachPhotos,
 } from '../storage.js';
+import {
+  putPhoto, getPhotoURL, getThumbURL, deletePhoto, compact, deleteAllForLock,
+  listForExport, importForLock,
+} from '../photos.js';
 import { groupLocks, parseSearch, filterLocks, allItemNames, suggestItems, generalLocations } from '../locks-view.js';
 import { shouldShowBadge } from './changelog-badge.js';
 
@@ -353,6 +358,43 @@ function saveActivePlate() {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ---- photos: async object-URL cache over a synchronous render ----
+// render() can't read IndexedDB, so the picker/list render from this cache. A miss kicks off
+// an async load that fills the cache and calls render() again. Object URLs survive the
+// innerHTML wipe; they're revoked only on invalidation (replace/remove/delete/lock change).
+const photoCache = new Map(); // lockId -> { loaded, loading, thumbs:[url|null,url|null], full:[url|null,url|null] }
+
+function photoEntry(lockId) {
+  let e = photoCache.get(lockId);
+  if (!e) { e = { loaded: false, loading: false, thumbs: [null, null], full: [null, null] }; photoCache.set(lockId, e); }
+  return e;
+}
+
+// Ensure slots 0..count-1 are loaded for lockId; re-render when the async load finishes.
+function ensurePhotosLoaded(lockId, count) {
+  if (!lockId || count <= 0) return;
+  const e = photoEntry(lockId);
+  if (e.loaded || e.loading) return;
+  e.loading = true;
+  (async () => {
+    for (let s = 0; s < count; s++) {
+      e.thumbs[s] = await getThumbURL(lockId, s);
+      e.full[s] = await getPhotoURL(lockId, s);
+    }
+    e.loaded = true;
+    e.loading = false;
+    render();
+  })();
+}
+
+// Revoke and forget a lock's cached URLs so the next render reloads from IndexedDB.
+function invalidatePhotos(lockId) {
+  const e = photoCache.get(lockId);
+  if (!e) return;
+  for (const u of [...e.thumbs, ...e.full]) if (u) URL.revokeObjectURL(u);
+  photoCache.delete(lockId);
 }
 
 // ---------- changelog modal ----------
