@@ -132,20 +132,21 @@ function freshSetup(n) {
     kind: 'Chest',
     description: '',
     contents: [],
+    photoCount: 0,
     lockId: undefined,
     lockLoaded: false,
   };
 }
 
 function persist() {
-  const { n, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken, stepLog } = state;
+  const { n, initial, mapping, location, kind, description, contents, photoCount, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken, stepLog } = state;
   // The import and contents screens are transient overlays over the Lock step — never
   // persist them as a saved session stage (a reload would otherwise restore an empty one).
   const stage = state.stage === 'import' || state.stage === 'contents' ? 'lock' : state.stage;
   // While editing positions in Solve, changes stay pending until Apply — persist the
   // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
   const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
-  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken, stepLog });
+  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, photoCount, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken, stepLog });
   syncLock();
 }
 
@@ -214,6 +215,7 @@ function syncLock() {
     // never carry an in-progress blank row — while state.contents keeps what's on screen.
     contents: sanitizeContents(state.contents),
     notes: '',
+    photoCount: state.photoCount || 0,
   };
   // This runs on every render, so write (and bump updatedAt) only when the
   // record genuinely changed — just viewing or solving a lock must not move
@@ -948,6 +950,8 @@ function contentsView() {
     ${namingWidgetHtml()}
     <div class="muted" style="margin:16px 0 4px">Contents</div>
     ${contentsEditorHtml(ed.items)}
+    <div class="muted" style="margin:16px 0 4px">Photos</div>
+    ${photosEditorHtml(ed.id, (getLock(store, ed.id) || {}).photoCount || 0)}
     <div style="margin-top:14px"><span class="ap-btn primary" data-action="contents-done">‹ Back to locks</span></div>`;
   col.appendChild(card);
   return col;
@@ -2004,6 +2008,8 @@ function solvePanel(side, boardProps) {
       ${namingWidgetHtml()}
       <div class="ap-h" style="margin-top:16px">Contents <span class="muted" style="text-transform:none;letter-spacing:0">— note what's inside (optional)</span></div>
       ${contentsEditorHtml(state.contents)}
+      <div class="ap-h" style="margin-top:16px">Photos <span class="muted" style="text-transform:none;letter-spacing:0">— up to 2 (optional)</span></div>
+      ${photosEditorHtml(state.lockId, state.photoCount || 0)}
       <div class="ap-h" style="margin-top:16px">Share this lock <span class="muted" style="text-transform:none;letter-spacing:0">— paste into Import on another device</span></div>
       <div class="share-panel">
         <textarea class="share-code" data-live-share readonly rows="2">${escapeHtml(buildShareCode())}</textarea>
@@ -2496,6 +2502,7 @@ appEl.addEventListener('click', (e) => {
         state.kind = lock.kind ?? 'Chest';
         state.description = lock.description ?? '';
         state.contents = (Array.isArray(lock.contents) ? lock.contents : []).map((c) => ({ ...c }));
+        state.photoCount = lock.photoCount || 0;
         // jump straight to whatever step is next: Solve if fully mapped, else resume mapping
         state.stage = state.lockLoaded ? 'solve' : 'discovery';
         state.editing = false;
@@ -2538,7 +2545,7 @@ appEl.addEventListener('click', (e) => {
       if (!window.confirm(`Delete ${lock ? `"${lock.name}"` : 'this lock'}? This can't be undone.`)) break;
       deleteLock(store, id);
       if (state.shareId === id) state.shareId = undefined;
-      if (state.lockId === id) { state.lockId = undefined; state.location = ''; state.kind = 'Chest'; state.description = ''; state.contents = []; }
+      if (state.lockId === id) { state.lockId = undefined; state.location = ''; state.kind = 'Chest'; state.description = ''; state.contents = []; state.photoCount = 0; }
       break;
     }
     case 'export-all': exportAllLocks(); return; // download only — no re-render needed
