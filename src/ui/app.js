@@ -185,7 +185,7 @@ const preserve = (lock) => ({ ...lock, updatedAt: lock.updatedAt ?? Date.now() }
 
 // Everything about a lock record except its timestamp, for change detection.
 const lockFingerprint = (l) =>
-  JSON.stringify([l.name, l.location, l.kind, l.description, l.n, l.initial, l.coupling, l.status, l.contents, l.notes]);
+  JSON.stringify([l.name, l.location, l.kind, l.description, l.n, l.initial, l.coupling, l.status, l.contents, l.notes, l.photoCount]);
 
 // Once the lock is identifiable (a location or description), keep its saved record current —
 // unless it would duplicate an existing lock, in which case refuse and flag a conflict.

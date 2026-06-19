@@ -14,6 +14,8 @@ import {
   sameIdentity,
   sanitizeContents,
   sanitizePhotos,
+  splitPhotos,
+  attachPhotos,
 } from '../src/storage.js';
 
 // minimal localStorage-compatible store for tests
@@ -308,4 +310,36 @@ test('sanitizePhotos returns [] for non-array input', () => {
   assert.deepEqual(sanitizePhotos(null), []);
   assert.deepEqual(sanitizePhotos('nope'), []);
   assert.deepEqual(sanitizePhotos({}), []);
+});
+
+test('splitPhotos strips photos into a separate array and sets photoCount', () => {
+  const lock = { id: 'a', n: 3, photos: ['data:image/jpeg;base64,AAAA', 'data:image/jpeg;base64,BBBB'] };
+  const { record, photos } = splitPhotos(lock);
+  assert.equal('photos' in record, false);
+  assert.equal(record.photoCount, 2);
+  assert.deepEqual(photos, ['data:image/jpeg;base64,AAAA', 'data:image/jpeg;base64,BBBB']);
+});
+
+test('splitPhotos on a lock with no photos yields photoCount 0 and empty array', () => {
+  const { record, photos } = splitPhotos({ id: 'a', n: 3 });
+  assert.equal(record.photoCount, 0);
+  assert.deepEqual(photos, []);
+});
+
+test('splitPhotos drops malformed photo entries via sanitizePhotos', () => {
+  const { record, photos } = splitPhotos({ id: 'a', n: 3, photos: ['nope', 'data:image/png;base64,CCCC'] });
+  assert.equal(record.photoCount, 1);
+  assert.deepEqual(photos, ['data:image/png;base64,CCCC']);
+});
+
+test('attachPhotos adds a photos array to a record copy without mutating the input', () => {
+  const record = { id: 'a', n: 3, photoCount: 1 };
+  const out = attachPhotos(record, ['data:image/jpeg;base64,AAAA']);
+  assert.deepEqual(out.photos, ['data:image/jpeg;base64,AAAA']);
+  assert.equal('photos' in record, false); // original untouched
+});
+
+test('attachPhotos with no photos omits the field', () => {
+  const out = attachPhotos({ id: 'a', n: 3, photoCount: 0 }, []);
+  assert.equal('photos' in out, false);
 });

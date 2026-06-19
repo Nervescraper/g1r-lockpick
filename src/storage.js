@@ -138,6 +138,22 @@ export function sanitizePhotos(photos) {
   return out;
 }
 
+// Separate an imported lock into the photo-free record that goes to localStorage (with a
+// tiny photoCount) and the cleaned data-URL list that goes to IndexedDB. The golden rule:
+// localStorage records never carry photo bytes.
+export function splitPhotos(lock) {
+  const photos = sanitizePhotos(lock.photos);
+  const { photos: _omit, ...rest } = lock;
+  return { record: { ...rest, photoCount: photos.length }, photos };
+}
+
+// Export-side inverse: return a copy of the record with a `photos` array attached (omitted
+// when empty so photo-free exports stay byte-identical to today's). Never mutates `record`.
+export function attachPhotos(record, photos) {
+  const clean = sanitizePhotos(photos);
+  return clean.length ? { ...record, photos: clean } : { ...record };
+}
+
 function readEnvelope(text) {
   if (typeof text !== 'string' || !text.trim()) return null;
   const tryParse = (s) => {
