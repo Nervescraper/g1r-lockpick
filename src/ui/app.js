@@ -2839,6 +2839,11 @@ appEl.addEventListener('input', (e) => {
     else { const v = e.target.value; row.qty = v === '' ? '' : Number(v); }
     persistContents();
     refreshLiveShare();
+    if (ctItem) {
+      const i = +ctItem.dataset.i;
+      state.contentSuggest = { row: i, sel: -1 };
+      refreshContentSuggest(i);
+    }
     return;
   }
   // update text fields + autosave without re-rendering (keeps the input focused)
@@ -2854,9 +2859,20 @@ appEl.addEventListener('input', (e) => {
 // pick-suggest / clear-search run on mousedown with preventDefault so the search box
 // never loses focus (which would close the dropdown before a click could land).
 appEl.addEventListener('mousedown', (e) => {
-  const t = e.target.closest('[data-action="pick-suggest"], [data-action="clear-search"]');
+  const t = e.target.closest('[data-action="pick-suggest"], [data-action="clear-search"], [data-action="pick-content-suggest"]');
   if (!t) return;
   e.preventDefault();
+  if (t.dataset.action === 'pick-content-suggest') {
+    const i = +t.dataset.i;
+    const arr = activeContents();
+    if (arr && arr[i]) { arr[i].item = t.dataset.value; persistContents(); refreshLiveShare(); }
+    state.contentSuggest = { row: null, sel: -1 };
+    const input = appEl.querySelector(`.ct-item[data-i="${i}"]`);
+    if (input) input.value = t.dataset.value;
+    refreshContentSuggest(i);
+    if (input) input.focus();
+    return;
+  }
   if (t.dataset.action === 'pick-suggest') applySuggestion(t.dataset.value);
   else { state.lockSearch = ''; state.searchSel = -1; }
   state.suggestOpen = true;
@@ -2903,6 +2919,50 @@ appEl.addEventListener('focusout', (e) => {
   state.suggestOpen = false;
   const sg = document.getElementById('lock-suggest');
   if (sg) sg.innerHTML = '';
+});
+
+// Keyboard within a contents item input: arrows move the highlight, Enter accepts it,
+// Esc closes. Global solve/setup shortcuts already bail on INPUT targets.
+appEl.addEventListener('keydown', (e) => {
+  const item = e.target.closest && e.target.closest('.ct-item');
+  if (!item) return;
+  const i = +item.dataset.i;
+  if (!state.contentSuggest || state.contentSuggest.row !== i) return;
+  const sugg = contentSuggestions(i);
+  if (e.key === 'ArrowDown' && sugg.length) {
+    e.preventDefault();
+    state.contentSuggest.sel = (state.contentSuggest.sel + 1) % sugg.length;
+    refreshContentSuggest(i);
+  } else if (e.key === 'ArrowUp' && sugg.length) {
+    e.preventDefault();
+    state.contentSuggest.sel = (Math.max(state.contentSuggest.sel, 0) - 1 + sugg.length) % sugg.length;
+    refreshContentSuggest(i);
+  } else if (e.key === 'Enter') {
+    if (state.contentSuggest.sel >= 0 && state.contentSuggest.sel < sugg.length) {
+      e.preventDefault();
+      const arr = activeContents();
+      if (arr && arr[i]) { arr[i].item = sugg[state.contentSuggest.sel]; persistContents(); refreshLiveShare(); }
+      state.contentSuggest = { row: null, sel: -1 };
+      item.value = arr && arr[i] ? arr[i].item : item.value;
+      refreshContentSuggest(i);
+    }
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    state.contentSuggest = { row: null, sel: -1 };
+    refreshContentSuggest(i);
+  }
+});
+
+// Closing a contents-item dropdown when its input loses focus. A click on a suggestion
+// fires on mousedown (with preventDefault), so it lands before this blur.
+appEl.addEventListener('focusout', (e) => {
+  const item = e.target.closest && e.target.closest('.ct-item');
+  if (!item) return;
+  const i = +item.dataset.i;
+  if (state.contentSuggest && state.contentSuggest.row === i) {
+    state.contentSuggest = { row: null, sel: -1 };
+    refreshContentSuggest(i);
+  }
 });
 
 window.addEventListener('keydown', (e) => {
