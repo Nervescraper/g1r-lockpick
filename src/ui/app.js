@@ -21,8 +21,14 @@ import {
 } from '../photos.js';
 import { groupLocks, parseSearch, filterLocks, allItemNames, suggestItems, generalLocations } from '../locks-view.js';
 import { shouldShowBadge } from './changelog-badge.js';
+import { pushSnapshot, formatTrace, isLocalHost } from './trace.js';
 
 const store = window.localStorage;
+// Dev-only: when served from localhost, record every persisted session snapshot
+// so a problematic run can be copied out (the "Copy Trace" bar button) and
+// replayed. No effect in production builds served from a real host.
+const DEV_TRACE = isLocalHost(window.location.hostname);
+const traceBuffer = [];
 const N_MIN = 3;
 const N_MAX = 8;
 const DIR_WORD = { L: 'Left', R: 'Right' };
@@ -158,7 +164,9 @@ function persist() {
   // While editing positions in Solve, changes stay pending until Apply — persist the
   // pre-edit snapshot so a drag/keystroke (or a reload) doesn't silently commit them.
   const positions = state.editing && state.editBackup ? state.editBackup : state.positions;
-  saveSession(store, { stage, n, positions, initial, mapping, location, kind, description, contents, photoCount, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken, stepLog });
+  const session = { stage, n, positions, initial, mapping, location, kind, description, contents, photoCount, lockId, lockLoaded, plan, planIndex, solveStart, blockedProbes, knownLinks, pickMistakes, picksBroken, stepLog };
+  saveSession(store, session);
+  if (DEV_TRACE) pushSnapshot(traceBuffer, JSON.stringify(session));
   syncLock();
 }
 
@@ -564,6 +572,10 @@ function render() {
   over.dataset.action = 'start-over';
   over.textContent = '⟳ Start over';
   bar.appendChild(over);
+  // Left-pinned group so the (dev-only) Copy Trace button sits beside the
+  // Changelog button instead of stacking on top of it at the same left:0 anchor.
+  const left = document.createElement('div');
+  left.className = 'ap-left';
   const clog = document.createElement('button');
   clog.className = 'ap-changelog';
   clog.dataset.action = 'open-changelog';
@@ -574,7 +586,15 @@ function render() {
     badge.textContent = 'New';
     clog.appendChild(badge);
   }
-  bar.appendChild(clog);
+  left.appendChild(clog);
+  if (DEV_TRACE) {
+    const trace = document.createElement('button');
+    trace.className = 'ap-changelog';
+    trace.dataset.action = 'copy-trace';
+    trace.textContent = `Copy Trace (${traceBuffer.length})`;
+    left.appendChild(trace);
+  }
+  bar.appendChild(left);
   wrap.appendChild(bar);
 
   if ((state.location || '').trim() || (state.description || '').trim()) {
@@ -2726,6 +2746,18 @@ appEl.addEventListener('click', (e) => {
     case 'import-done': state.stage = 'lock'; state.import = undefined; break;
     case 'cf-choice': state.import.choices[+t.dataset.i] = t.dataset.choice; break;
     case 'search-input': return; // clicking the search box must not trigger a full re-render
+    case 'copy-trace': { // dev-only: copy the recorded session trace; no state change → no re-render
+      const text = formatTrace(traceBuffer);
+      const done = (ok) => {
+        t.textContent = ok ? `Copied ✓ (${traceBuffer.length})` : 'Copy failed — see console';
+        if (!ok) console.log(text); // eslint-disable-line no-console -- fallback so the trace is still retrievable
+        setTimeout(() => { t.textContent = `Copy Trace (${traceBuffer.length})`; }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
+      } else { done(false); }
+      return;
+    }
     case 'open-changelog': openChangelog(); return; // overlay lives outside the app state/render cycle
     case 'open-fullplan': openPlanModal(); return; // overlay lives outside the app state/render cycle
     default: return;

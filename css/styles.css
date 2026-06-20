@@ -42,8 +42,10 @@ body {
 .ap-bar .ap-rail { margin: 0; }
 .ap-reset { position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 4px 11px; border-radius: 6px; border: 1px solid #3a3833; background: #221f1b; color: #b9b3a6; cursor: pointer; }
 .ap-reset:hover { color: #eee; border-color: #555; }
-/* Mirror of .ap-reset, pinned to the left edge of the bar at the same height. */
-.ap-changelog { position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-size: 12px; padding: 4px 11px; border-radius: 6px; border: 1px solid #3a3833; background: #221f1b; color: #b9b3a6; cursor: pointer; }
+/* Left group, mirroring .ap-reset but pinned to the left edge at the same height.
+   Holds the Changelog button (and the dev-only Copy Trace button) side by side. */
+.ap-left { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; }
+.ap-changelog { font-size: 12px; padding: 4px 11px; border-radius: 6px; border: 1px solid #3a3833; background: #221f1b; color: #b9b3a6; cursor: pointer; }
 .ap-changelog:hover { color: #eee; border-color: #555; }
 /* "New" pill on the Changelog button when there are unseen changelog entries. */
 .ap-badge-new { margin-left: 6px; padding: 1px 5px; border-radius: 7px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; background: var(--shr); color: #1a1916; vertical-align: 1px; }
@@ -411,7 +413,7 @@ body.tp-dragging, body.tp-dragging * { cursor: grabbing !important; }
      stage pill. Stack it under the (wrappable) rail instead. */
   .ap-bar { flex-direction: column; align-items: center; gap: 9px; }
   .ap-rail { flex-wrap: wrap; }
-  .ap-reset, .ap-changelog { position: static; transform: none; }
+  .ap-reset, .ap-left { position: static; transform: none; }
 }
 
 /* Lock photos */
