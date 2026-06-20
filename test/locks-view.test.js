@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupLocks, parseSearch, matchLockContents, filterLocks, allItemNames, suggestItems, generalLocations, DEFAULT_LOCATIONS } from '../src/locks-view.js';
+import { groupLocks, parseSearch, matchLockContents, filterLocks, allItemNames, suggestItems, otherItemNames, itemSuggestions, generalLocations, DEFAULT_LOCATIONS } from '../src/locks-view.js';
 
 const lock = (id, location, updatedAt) => ({ id, location, updatedAt });
 const withItems = (id, ...items) => ({ id, contents: items.map((item) => ({ item, qty: 1 })) });
@@ -137,6 +137,32 @@ test('suggestItems: empty token yields nothing; respects the cap', () => {
   const many = Array.from({ length: 12 }, (_, i) => `Ore ${String.fromCharCode(97 + i)}`);
   assert.equal(suggestItems(many, 'ore', new Set(), 8).length, 8);
   assert.deepEqual(suggestItems(['Ore c', 'Ore a', 'Ore b'], 'ore', new Set(), 2), ['Ore a', 'Ore b']);
+});
+
+test('otherItemNames: lowercased set of other rows, excludes the skipped row and blanks', () => {
+  const items = [{ item: 'Gold' }, { item: 'Iron Ore' }, { item: '' }, { item: 'gold' }];
+  assert.deepEqual([...otherItemNames(items, 0)].sort(), ['gold', 'iron ore']);
+  assert.deepEqual([...otherItemNames(items, 1)].sort(), ['gold']);
+});
+
+test('otherItemNames: single row yields an empty set; tolerates missing item', () => {
+  assert.deepEqual([...otherItemNames([{ item: 'Gold' }], 0)], []);
+  assert.deepEqual([...otherItemNames([{}, { item: 'Gold' }], 1)], []);
+});
+
+test('itemSuggestions: whole value is the token; substring match, sorted', () => {
+  const names = ['Iron Ore', 'Ore chunk', 'Gold'];
+  assert.deepEqual(itemSuggestions(names, 'ore', new Set()), ['Iron Ore', 'Ore chunk']);
+});
+
+test('itemSuggestions: suppresses an exact (case-insensitive) match of the value', () => {
+  const names = ['Gold', 'Gold bar'];
+  assert.deepEqual(itemSuggestions(names, 'gold', new Set()), ['Gold bar']);
+});
+
+test('itemSuggestions: empty/blank value yields nothing; excludes otherNames', () => {
+  assert.deepEqual(itemSuggestions(['Gold'], '   ', new Set()), []);
+  assert.deepEqual(itemSuggestions(['Gold', 'Gold bar'], 'gold', new Set(['gold bar'])), []);
 });
 
 const locAt = (location) => ({ location });

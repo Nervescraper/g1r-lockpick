@@ -149,4 +149,26 @@ export function suggestItems(names, token, alreadyChosen, limit = 8) {
     .map(([n]) => n);
 }
 
+// The lowercased names of every row EXCEPT `skipIndex`, blanks dropped — used to keep
+// the contents-editor autocomplete from suggesting an item already added to the lock.
+export function otherItemNames(items, skipIndex) {
+  const out = new Set();
+  (items || []).forEach((c, i) => {
+    if (i === skipIndex) return;
+    const name = String(c && c.item != null ? c.item : '').trim().toLowerCase();
+    if (name) out.add(name);
+  });
+  return out;
+}
+
+// Suggestions for a single item-name field: the whole trimmed value is the token.
+// Reuses suggestItems, then drops a name identical to what's already typed (nothing
+// left to complete). `otherNames` excludes items already on the lock.
+export function itemSuggestions(names, value, otherNames, limit = 8) {
+  const token = String(value ?? '').trim();
+  if (!token) return [];
+  const exact = token.toLowerCase();
+  return suggestItems(names, token, otherNames, limit).filter((n) => n.toLowerCase() !== exact);
+}
+
 export { RECENT_LIMIT, OTHER_KEY };
