@@ -9,7 +9,7 @@ import {
 import { coachingMessage } from './coaching.js';
 import { findCycles, expandedLayout, nextSectionStart, prevSectionStart } from '../cycles.js';
 import { planColumnCount } from './plan-columns.js';
-import { createMapping, recommendNext, allMapped, defer } from '../discovery.js';
+import { createMapping, recommendNext, allMapped, defer, jamSignature, activeBlocks, dropJamsForPlate, wiggleEdgeBlock, dropWiggleBlock } from '../discovery.js';
 import {
   loadLocks, saveLock, getLock, deleteLock, loadSession, saveSession, loadSettings, saveSettings,
   exportLocks, encodeShare, parseImport, classifyImport, sameIdentity, sanitizeContents,
@@ -34,6 +34,12 @@ const CHANGELOG_VERSION = '1.5.0';
 
 // User-facing changelog, newest first. Shown in the in-app changelog modal.
 const CHANGELOG = [
+  {
+    date: '2026-06-20',
+    items: [
+      'Remembered jams are more reliable: a jammed press stays ruled out while the slides that caused it remain on their edges, instead of reappearing when you move unrelated slides. Tagging a slide you saw wiggle blocks its press the same way.',
+    ],
+  },
   {
     date: '2026-06-19',
     items: [
@@ -262,17 +268,13 @@ function relFromMapping(plate) {
   return rel;
 }
 
-// Presses the player reported as jams are remembered against the exact slide
-// positions they failed at (state.blockedProbes, "pos|plate|dir"). This returns
-// the ones that apply right now, in the "plate|dir" form recommendNext takes —
-// the same press at different positions is a different (untried) press.
+// Presses the player reported as jams are remembered by the edge configuration
+// that caused them (state.blockedProbes hold jamSignature strings). This returns
+// the ones that still apply — every edge plate from the jam is still on its edge,
+// so the press is guaranteed to jam again — in the "plate|dir" form recommendNext
+// takes. A press whose blocker has since cleared becomes retryable again.
 function blockedNow() {
-  const here = `${state.positions.join(',')}|`;
-  const set = new Set();
-  for (const k of state.blockedProbes || []) {
-    if (k.startsWith(here)) set.add(k.slice(here.length));
-  }
-  return set;
+  return activeBlocks(state.positions, state.blockedProbes || []);
 }
 
 // Soft links — "i|j" pairs the player saw wiggle on one of plate i's jams:
@@ -2269,7 +2271,7 @@ function logStep(plate, dir) {
 // the jam notice with its wiggle capture. Shared by the mapping probe flow and
 // a planned solve move that jams.
 function reportJam(plate, dir) {
-  (state.blockedProbes ??= []).push(`${state.positions.join(',')}|${plate}|${dir}`);
+  (state.blockedProbes ??= []).push(jamSignature(state.positions, plate, dir));
   const jn = { plate, dir, positions: state.positions.slice() };
   const edgeOthers = jamEdgeOthers(jn);
   if (edgeOthers.length === 1) {
@@ -2511,7 +2513,7 @@ appEl.addEventListener('click', (e) => {
       state.mapping.coupling[i] = row;
       state.mapping.status[i] = 'unstarted';
       state.knownLinks = (state.knownLinks || []).filter((k) => !k.startsWith(`${i}|`));
-      state.blockedProbes = (state.blockedProbes || []).filter((k) => +k.split('|')[1] !== i);
+      state.blockedProbes = dropJamsForPlate(state.blockedProbes || [], i);
       state.lockLoaded = false;
       state.plan = undefined;
       state.skipPlanKey = undefined;
@@ -2537,11 +2539,17 @@ appEl.addEventListener('click', (e) => {
         if (jn.autoLearned === j) jn.autoLearned = undefined;
       } else if (links.includes(key)) {
         state.knownLinks = links.filter((k) => k !== key); // undo a soft link
+        state.blockedProbes = dropWiggleBlock(state.blockedProbes || [], jn.plate, j);
       } else if (jamEdgeOthers(jn).length === 1 && jamEdgeOthers(jn)[0] === j) {
         row[j] = blockerCell(jn, j); // sole edge slide ⇒ the blocker ⇒ exact
         jn.autoLearned = j;
       } else {
         links.push(key);
+        // A wiggler on an edge is a blocker candidate: veto this press while it
+        // stays there, even if other edge plates later move (the full-edge jam
+        // signature alone would release it then).
+        const veto = wiggleEdgeBlock(jn.plate, jn.dir, j, jn.positions[j]);
+        if (veto) (state.blockedProbes ??= []).push(veto);
       }
       defer(state.mapping, jn.plate); // the row carries partial knowledge now
       suggestDefault(); // learned links can rule out (or reopen) suggestions

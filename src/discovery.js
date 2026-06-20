@@ -22,6 +22,72 @@ export function recordShifts(mapping, plate, probeDir, shifts) {
   }
 }
 
+// Record a reported jam by the EDGE CONFIGURATION that caused it, not the full
+// board. A jam can only happen when the press pushes some plate past an edge,
+// and a plate can only be pushed past an edge if it already sits on one — so
+// every possible blocker is among the plates on an edge at jam time. Storing
+// just those (index:edge-value) lets the jam generalize: it still applies at any
+// later position where the same plates sit on the same edges, regardless of
+// where the interior plates moved. Shape: "plate|dir|i:v,j:v" (edges sorted by
+// index for a stable key).
+export function jamSignature(positions, plate, dir) {
+  const edges = [];
+  for (let i = 0; i < positions.length; i++) {
+    if (positions[i] <= MIN) edges.push(`${i}:${MIN}`);
+    else if (positions[i] >= MAX) edges.push(`${i}:${MAX}`);
+  }
+  return `${plate}|${dir}|${edges.join(',')}`;
+}
+
+// Resolve stored jam signatures against the current board: a press is blocked
+// now iff every edge plate from its jam is STILL on that edge (the blocker,
+// whichever it was, hasn't moved → the press will jam again). If any has
+// cleared, the press becomes retryable. Returns a Set of "plate|dir".
+// Unparseable entries (e.g. an older position-keyed format) simply don't match.
+export function activeBlocks(positions, signatures = []) {
+  const out = new Set();
+  for (const sig of signatures) {
+    const [plate, dir, edges] = sig.split('|');
+    if (!edges) continue; // a real jam always has at least one edge plate
+    const persists = edges.split(',').every((e) => {
+      const [i, v] = e.split(':').map(Number);
+      return positions[i] === v;
+    });
+    if (persists) out.add(`${plate}|${dir}`);
+  }
+  return out;
+}
+
+// A per-wiggler veto: a plate the player tagged wiggling during a jam is a
+// blocker candidate, and a blocker must sit on an edge. So if `j` was on an edge
+// when it wiggled under a dir-`d` press of `plate`, that press stays unsafe while
+// `j` stays on that edge — even after the full-edge jam signature has released
+// because some OTHER edge plate moved. Same "plate|dir|i:v" shape as a jam
+// signature (with a single edge), so activeBlocks resolves it unchanged. The
+// link's sign is unknown, so this is conservative: worst case it declines a
+// press that might have worked, never one that's known-risky. Returns null when
+// the tagged plate wasn't on an edge (an interior wiggle blames no edge).
+export function wiggleEdgeBlock(plate, dir, j, posJ) {
+  const edge = posJ <= MIN ? MIN : posJ >= MAX ? MAX : null;
+  return edge == null ? null : `${plate}|${dir}|${j}:${edge}`;
+}
+
+// Remove the single-edge wiggle veto for (plate -> j), used when the player
+// untags that wiggle. Leaves the full-edge jam signature (the press still
+// jammed) and every other plate's veto intact.
+export function dropWiggleBlock(signatures = [], plate, j) {
+  return signatures.filter((sig) => {
+    const [p, , edges = ''] = sig.split('|');
+    return !(Number(p) === plate && !edges.includes(',') && Number(edges.split(':')[0]) === j);
+  });
+}
+
+// Drop every jam signature belonging to `plate` (used when a plate is forgotten
+// to be re-mapped). Keeps the format's plate field private to this module.
+export function dropJamsForPlate(signatures = [], plate) {
+  return signatures.filter((sig) => Number(sig.split('|')[0]) !== plate);
+}
+
 // A probe is "guaranteed not to block" when:
 //  - the selected plate itself won't be pushed past an edge by its own +/-1, and
 //  - every OTHER plate is strictly interior (2..6), so any unknown +/-1 coupling
