@@ -43,6 +43,7 @@ const CHANGELOG = [
   {
     date: '2026-06-20',
     items: [
+      'Autocomplete item names when recording chest contents, suggested from items across your saved locks.',
       'Remembered jams are more reliable: a jammed press stays ruled out while the slides that caused it remain on their edges, instead of reappearing when you move unrelated slides. Tagging a slide you saw wiggle blocks its press the same way.',
     ],
   },
