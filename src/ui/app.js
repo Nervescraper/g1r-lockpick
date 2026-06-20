@@ -2583,8 +2583,12 @@ appEl.addEventListener('click', (e) => {
         logStep(plate, dir);
         state.positions = applyMove(state.positions, state.mapping.coupling, plate, dir);
         state.skipPlanKey = undefined; // positions changed → re-offer any edge plan
-        // re-base the in-progress recording against the new positions
-        if (state.activePlate != null) seedRecording(state.activePlate);
+        // The board moved, so the best plate to work next may have changed. With
+        // suggestions on, follow the new recommendation (like saving a plate does)
+        // so the ledger's selection tracks the banner; in manual mode just re-base
+        // the current recording against the new positions.
+        if (suggestEnabled()) suggestDefault();
+        else if (state.activePlate != null) seedRecording(state.activePlate);
       }
       break;
     }
