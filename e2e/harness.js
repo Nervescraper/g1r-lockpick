@@ -54,8 +54,9 @@ export class Driver {
     });
     page.on('pageerror', (err) => this.issue('pageerror', String(err)));
     page.on('requestfailed', (req) => {
-      // The GitHub buttons script is third-party and irrelevant to the app.
-      if (!req.url().includes('buttons.github.io')) {
+      // The GitHub star widget (buttons.github.io + api.github.com) is third-party
+      // and irrelevant to the app — it rate-limits/aborts under repeated runs.
+      if (!/buttons\.github\.io|api\.github\.com/.test(req.url())) {
         this.issue('network', `request failed: ${req.url()} (${req.failure()?.errorText})`);
       }
     });
