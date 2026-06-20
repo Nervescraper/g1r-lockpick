@@ -19,7 +19,7 @@ import {
   putPhoto, getPhotoURL, getThumbURL, deletePhoto, compact, deleteAllForLock,
   listForExport, importForLock,
 } from '../photos.js';
-import { groupLocks, parseSearch, filterLocks, allItemNames, suggestItems, generalLocations } from '../locks-view.js';
+import { groupLocks, parseSearch, filterLocks, allItemNames, suggestItems, otherItemNames, itemSuggestions, generalLocations } from '../locks-view.js';
 import { shouldShowBadge } from './changelog-badge.js';
 import { pushSnapshot, formatTrace, isLocalHost } from './trace.js';
 
@@ -124,6 +124,9 @@ const CHANGELOG = [
 const appEl = document.getElementById('app');
 
 let state = restore();
+// Which contents-editor row owns the open autocomplete dropdown, and the highlighted
+// suggestion within it. Ephemeral UI state, never persisted (mirrors searchSel).
+state.contentSuggest = state.contentSuggest || { row: null, sel: -1 };
 let settings = loadSettings(store);
 const kbdEnabled = () => settings.keyboardShortcuts !== false; // on by default
 const suggestEnabled = () => settings.suggestMoves !== false; // move suggestions on by default
@@ -1009,7 +1012,10 @@ function contentsEditorHtml(items) {
     .map((c, i) => {
       const qty = Number.isFinite(c.qty) && c.qty >= 1 ? Math.floor(c.qty) : 1;
       return `<div class="ct-row">
-        <input class="ct-item" type="text" data-action="content-item" data-i="${i}" placeholder="Item…" value="${escapeHtml(c.item || '')}" />
+        <div class="ct-item-wrap">
+          <input class="ct-item" type="text" autocomplete="off" data-action="content-item" data-i="${i}" placeholder="Item…" value="${escapeHtml(c.item || '')}" />
+          <div id="ct-suggest-${i}" class="ls-suggest">${contentSuggestDropdownHtml(i)}</div>
+        </div>
         <input class="ct-qty" type="number" min="1" step="1" inputmode="numeric" data-action="content-qty" data-i="${i}" value="${qty}" />
         <button class="ct-del" data-action="content-del" data-i="${i}" title="Remove item" aria-label="Remove item">✕</button>
       </div>`;
@@ -1220,6 +1226,40 @@ function suggestDropdownHtml() {
       `<div class="ls-opt${i === state.searchSel ? ' sel' : ''}" data-action="pick-suggest" data-value="${escapeHtml(name)}">${escapeHtml(name)}</div>`
     )
     .join('');
+}
+
+// ---------- contents-editor item-name autocomplete ----------
+
+// Pool is every saved lock's items (the in-progress success-screen lock contributes
+// nothing yet, which is fine — its items aren't saved until the lock is).
+function contentSuggestPool() {
+  return allItemNames(loadLocks(store));
+}
+
+// Suggestions for one editor row — [] unless that row's dropdown is the open one.
+function contentSuggestions(rowIndex) {
+  if (!state.contentSuggest || state.contentSuggest.row !== rowIndex) return [];
+  const arr = activeContents() || [];
+  const value = arr[rowIndex] ? arr[rowIndex].item : '';
+  return itemSuggestions(contentSuggestPool(), value, otherItemNames(arr, rowIndex));
+}
+
+// The .ls-opt rows for a given editor row, reusing the search dropdown markup/classes.
+function contentSuggestDropdownHtml(rowIndex) {
+  const sugg = contentSuggestions(rowIndex);
+  if (!sugg.length) return '';
+  const sel = state.contentSuggest ? state.contentSuggest.sel : -1;
+  return sugg
+    .map((name, i) =>
+      `<div class="ls-opt${i === sel ? ' sel' : ''}" data-action="pick-content-suggest" data-i="${rowIndex}" data-value="${escapeHtml(name)}">${escapeHtml(name)}</div>`
+    )
+    .join('');
+}
+
+// Surgical refresh of one row's dropdown — never calls render(), so focus/caret stay.
+function refreshContentSuggest(rowIndex) {
+  const sg = document.getElementById(`ct-suggest-${rowIndex}`);
+  if (sg) sg.innerHTML = contentSuggestDropdownHtml(rowIndex);
 }
 
 function searchBarHtml() {
